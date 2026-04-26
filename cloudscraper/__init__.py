@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, Union, List
 
 from requests.adapters import HTTPAdapter
 from requests.sessions import Session
-from requests_toolbelt.utils import dump
+from .http_inspector import inspect_all as _inspect_all
 
 # ------------------------------------------------------------------------------- #
 
@@ -132,7 +132,7 @@ class CloudScraper(Session):
         self.delay = kwargs.pop('delay', None)
         self.captcha = kwargs.pop('captcha', {})
         self.doubleDown = kwargs.pop('doubleDown', True)
-        self.interpreter = kwargs.pop('interpreter', 'js2py')  # Default to js2py for better compatibility
+        self.interpreter = kwargs.pop('interpreter', 'native')  # Built-in pure-Python JS engine
 
         # Request hooks
         self.requestPreHook = kwargs.pop('requestPreHook', None)
@@ -266,7 +266,7 @@ class CloudScraper(Session):
     @staticmethod
     def debugRequest(req):
         try:
-            print(dump.dump_all(req).decode('utf-8', errors='backslashreplace'))
+            print(_inspect_all(req).decode('utf-8', errors='backslashreplace'))
         except ValueError as e:
             print(f"Debug Error: {getattr(e, 'message', e)}")
 
