@@ -83,4 +83,15 @@ Sem o **VeNoMouS**, bypass de Cloudflare em Python seria um pesadelo. 🎩
 
 ---
 
+## 📄 Licenças de Dependências
+
+Este projeto faz uso das seguintes bibliotecas open source, cada uma sob sua respectiva licença:
+
+| Biblioteca | Autor | Licença | Link |
+|---|---|---|---|
+| [js2py](https://github.com/PiotrDabkowski/Js2Py) | Piotr Dabkowski | MIT | [Ver licença](https://opensource.org/licenses/MIT) |
+| [requests-toolbelt](https://github.com/requests/toolbelt) | Ian Cordasco, Cory Benfield | Apache 2.0 | [Ver licença](https://www.apache.org/licenses/LICENSE-2.0) |
+
+---
+
 *Feito com ❤️ pela **oneplay team***
