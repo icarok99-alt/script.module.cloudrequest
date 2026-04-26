@@ -1,7 +1,6 @@
 import re
 import sys
 import base64
-import logging
 import abc
 
 from ..exceptions import CloudflareSolveError
@@ -29,14 +28,8 @@ class JavaScriptInterpreter(ABC):
     # ------------------------------------------------------------------------------- #
 
     @classmethod
-    def dynamicImport(cls, name):
-        if name not in interpreters:
-            logging.warning(
-                'Interpreter "{}" not found, using built-in native engine.'.format(name)
-            )
-            return interpreters['native']
-
-        return interpreters[name]
+    def dynamicImport(cls, name=None):
+        return interpreters['native']
 
     # ------------------------------------------------------------------------------- #
 
