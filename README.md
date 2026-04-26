@@ -1,6 +1,6 @@
 # CloudRequest
 
-**Versão:** 1.0.0  
+**Versão:** 1.0.2  
 **Desenvolvido por:** oneplay team
 
 ---
@@ -15,8 +15,9 @@ Permite que addons Kodi acessem sites protegidos pelo Cloudflare de forma transp
 
 ## Recursos
 
-- Bypass automático de desafios Cloudflare IUAM
+- Bypass automático de desafios Cloudflare IUAM, v2, v3 e Turnstile
 - Compatível com a API do `requests`
+- **Interpretador JavaScript próprio** — sem dependências externas de runtime JS
 - Implementado 100% em Python
 - Leve e otimizado para Kodi
 
@@ -35,7 +36,7 @@ response = session.get("https://site-protegido.com")
 print(response.text)
 ```
 
-A sessão retornada é totalmente compatível com a API do `requests`, então você pode usar `get`, `post`, `headers`, `cookies` e tudo mais normalmente:
+A sessão retornada é totalmente compatível com a API do `requests`:
 
 ```python
 session = CloudRequest().get_session()
@@ -53,21 +54,33 @@ print(response.cookies)
 
 ---
 
-## 🏆 Créditos Especiais
+## Arquitetura interna
 
-Este projeto só existe graças ao trabalho brilhante de pessoas incríveis da comunidade open source.
+```
+cloudscraper/
+├── __init__.py                  # Núcleo do cloudscraper
+├── cloudflare.py                # Handler IUAM v1
+├── cloudflare_v2.py             # Handler IUAM v2
+├── cloudflare_v3.py             # Handler JS VM v3
+├── turnstile.py                 # Handler Turnstile
+├── stealth.py                   # Técnicas anti-detecção
+├── http_inspector.py            # Inspetor HTTP (substitui requests-toolbelt)
+├── help.py                      # Diagnóstico do ambiente
+└── interpreters/
+    ├── __init__.py              # JavaScriptInterpreter + NativeInterpreter
+    └── js_engine.py             # Motor JS puro em Python
+```
+
+O `js_engine.py` implementa o subconjunto ES5/ES6 necessário para resolver os desafios Cloudflare:
+
+- Coerção de tipos JS (`+[]`, `!+[]`, `[]+{}`, etc.)
+- Escopos léxicos, closures, arrow functions
+- Operadores bitwise, `typeof`, `instanceof`
+- Built-ins: `Math`, `JSON`, `Array`, `String`, `Object`, `Number`, `atob/btoa`, `parseInt`, `console`, `Date.now`
 
 ---
 
-### 🧠 js2py — Piotr Dabkowski
-
-> **Repositório:** [github.com/PiotrDabkowski/Js2Py](https://github.com/PiotrDabkowski/Js2Py)
-
-O **js2py** é uma das bibliotecas mais impressionantes do ecossistema Python: um interpretador JavaScript escrito inteiramente em Python puro, sem depender de nenhum runtime externo como Node.js.
-
-É graças a esse trabalho monumental que o CloudRequest consegue resolver os desafios JavaScript da Cloudflare de forma nativa, diretamente no ambiente do Kodi.
-
-Piotr Dabkowski merece todo o reconhecimento por uma contribuição que, silenciosamente, sustenta inúmeros projetos ao redor do mundo. 🙌
+## 🏆 Créditos Especiais
 
 ---
 
@@ -77,20 +90,23 @@ Piotr Dabkowski merece todo o reconhecimento por uma contribuição que, silenci
 
 O **cloudscraper** é a espinha dorsal deste módulo. Construído sobre o `requests`, ele implementa toda a lógica de detecção e bypass de proteções Cloudflare — do clássico IUAM ao moderno Turnstile.
 
-Manter o cloudscraper funcional exige um trabalho contínuo de engenharia reversa à medida que a Cloudflare evolui seus mecanismos de proteção. Esse esforço é simplesmente notável e merece muito respeito.
-
 Sem o **VeNoMouS**, bypass de Cloudflare em Python seria um pesadelo. 🎩
+
+---
+
+### 🧠 js2py — Piotr Dabkowski *(inspiração)*
+
+> **Repositório:** [github.com/PiotrDabkowski/Js2Py](https://github.com/PiotrDabkowski/Js2Py)
+
+O **js2py** foi a inspiração original para a abordagem de interpretar JavaScript diretamente em Python. A partir da v1.0.2, o CloudRequest não depende mais do js2py como biblioteca instalada — o engine é próprio e embutido. 🙌
 
 ---
 
 ## 📄 Licenças de Dependências
 
-Este projeto faz uso das seguintes bibliotecas open source, cada uma sob sua respectiva licença:
-
 | Biblioteca | Autor | Licença | Link |
 |---|---|---|---|
-| [js2py](https://github.com/PiotrDabkowski/Js2Py) | Piotr Dabkowski | MIT | [Ver licença](https://opensource.org/licenses/MIT) |
-| [requests-toolbelt](https://github.com/requests/toolbelt) | Ian Cordasco, Cory Benfield | Apache 2.0 | [Ver licença](https://www.apache.org/licenses/LICENSE-2.0) |
+| [cloudscraper](https://github.com/VeNoMouS/cloudscraper) | VeNoMouS | MIT | [Ver licença](https://opensource.org/licenses/MIT) |
 
 ---
 
