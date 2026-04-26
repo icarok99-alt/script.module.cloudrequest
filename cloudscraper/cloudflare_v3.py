@@ -26,7 +26,7 @@ from .exceptions import (
 
 # ------------------------------------------------------------------------------- #
 
-from .interpreters import JavaScriptInterpreter
+from .interpreters import JavaScriptInterpreter as _JSI
 
 # ------------------------------------------------------------------------------- #
 
@@ -197,12 +197,11 @@ class CloudflareV3():
             }}
             """
             
-            # Execute the JavaScript using the configured interpreter
+            # Execute the JavaScript using the pure Python engine
             try:
-                result = JavaScriptInterpreter.dynamicImport(
-                    self.cloudscraper.interpreter
-                ).eval(js_context, domain)
-                
+                engine = _JSI.dynamicImport('native')
+                result = engine.eval(js_context, domain)
+
                 return str(result) if result is not None else self.generate_fallback_response(challenge_data)
                 
             except Exception as js_error:
@@ -328,4 +327,3 @@ class CloudflareV3():
         except Exception as e:
             logging.error(f"Error handling Cloudflare v3 challenge: {str(e)}")
             raise CloudflareChallengeError(f"Error handling Cloudflare v3 challenge: {str(e)}")
-

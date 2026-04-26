@@ -30,7 +30,6 @@ from .exceptions import (
 # ------------------------------------------------------------------------------- #
 
 from .captcha import Captcha
-from .interpreters import JavaScriptInterpreter
 
 # ------------------------------------------------------------------------------- #
 

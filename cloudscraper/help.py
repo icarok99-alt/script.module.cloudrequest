@@ -55,6 +55,7 @@ def systemInfo():
         ('platform', platform_info),
         ('interpreter', _pythonVersion()),
         ('cloudscraper', cloudscraper_version),
+        ('js_engine', 'native (built-in)'),
         ('requests', requests.__version__),
         ('urllib3', urllib3.__version__),
         ('OpenSSL', OrderedDict(

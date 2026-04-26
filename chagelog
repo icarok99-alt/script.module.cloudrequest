@@ -1,0 +1,42 @@
+# Changelog
+
+---
+
+## [1.0.2] — 2026-04-26
+
+### Removido
+- Dependência da biblioteca `js2py` — não é mais necessário instalar
+- Dependência da biblioteca `requests-toolbelt` — substituída por módulo próprio
+- `interpreters/js2py.py` — substituído pelo `js_engine`
+- `interpreters/js2py_interpreter.py` — substituído pelo `js_engine`
+- `interpreters/native.py` — lógica migrada para `interpreters/__init__.py`
+- `interpreters/nodejs.py` — exigia Node.js externo
+- `interpreters/chakracore.py` — exigia biblioteca nativa ChakraCore
+- `interpreters/v8.py` — exigia biblioteca v8eval externa
+- `interpreters/encapsulated.py` — usado apenas pelos interpreters removidos
+- `interpreters/jsunfuck.py` — não utilizado pelos arquivos ativos do projeto
+
+### Adicionado
+- `interpreters/js_engine.py` — motor principal do projeto, interpretador JavaScript puro em Python
+  - Lexer, Parser e Interpreter completos implementados do zero
+  - Suporte a ES5/ES6: closures, arrow functions, `typeof`, operadores bitwise
+  - Coerção de tipos Cloudflare: `+[]`, `!+[]`, `[]+{}` e similares
+  - Built-ins: `Math`, `JSON`, `Array`, `String`, `Object`, `Number`, `atob/btoa`, `parseInt`, `console`, `Date.now`
+- `http_inspector.py` — módulo próprio para inspeção de tráfego HTTP
+  - Funções `inspect_response()` e `inspect_all()` compatíveis com a API anterior
+
+### Alterado
+- `interpreters/__init__.py` — reescrito com `_NativeInterpreter` embutido, backed pelo `js_engine`
+  - Único interpreter do projeto, registrado como `'native'`
+  - `dynamicImport()` simplificado — fallback automático para `'native'` para qualquer nome solicitado
+- `cloudflare_v3.py` — migrado para usar `JavaScriptInterpreter.dynamicImport('native')`
+- `cloudflare_v2.py` — removido import não utilizado de `JavaScriptInterpreter`
+- `__init__.py` — interpreter padrão alterado de `'js2py'` para `'native'`
+- `__init__.py` — `dump.dump_all()` substituído por `_inspect_all()` do `http_inspector`
+- `help.py` — `systemInfo()` atualizado com label `'native (built-in)'`
+
+---
+
+## [1.0.1] — anterior
+
+- Versão inicial com suporte a js2py como interpretador JavaScript externo
