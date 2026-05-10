@@ -41,27 +41,24 @@ class CloudflareTurnstile:
     @staticmethod
     def is_Turnstile_Challenge(resp) -> bool:
         try:
-            if not resp.headers.get('Server', '').lower().startswith('cloudflare'):
-                return False
-
-            if resp.status_code not in [403, 429, 503]:
-                return False
-
-            text = resp.text.lower()
-
-            patterns = [
-                r'challenges\.cloudflare\.com/turnstile/v0/api\.js',
-                r'turnstile\.render',
-                r'sitekey["\']?\s*:\s*["\']0x[0-9a-z]+',
-                r'data-sitekey=["\'][0-9a-z]{40}',
-                r'id=["\'](?:turnstile-container|cf-turnstile)',
-                r'class=["\'][^"\']*g-recaptcha',
-                r'cf-turnstile',
-            ]
-
-            return any(re.search(pattern, text, re.I | re.M | re.S) for pattern in patterns)
-
-        except Exception:
+            return bool(
+                resp.headers.get('Server', '').startswith('cloudflare')
+                and resp.status_code in [403, 429, 503]
+                and (
+                    re.search(r'class="cf-turnstile"', resp.text, re.M | re.S)
+                    or re.search(
+                        r'src="https://challenges\.cloudflare\.com/turnstile/v0/api\.js',
+                        resp.text,
+                        re.M | re.S,
+                    )
+                    or re.search(
+                        r'data-sitekey="[0-9A-Za-z]{40}"',
+                        resp.text,
+                        re.M | re.S,
+                    )
+                )
+            )
+        except AttributeError:
             return False
 
     # ------------------------------------------------------------------------------- #
@@ -69,34 +66,22 @@ class CloudflareTurnstile:
     # ------------------------------------------------------------------------------- #
 
     def extract_turnstile_data(self, resp) -> dict:
-        text = resp.text
+        site_key = re.search(r'data-sitekey="([0-9A-Za-z]{40})"', resp.text)
 
-        site_key_match = re.search(
-            r'sitekey\s*:\s*["\']([0-9A-Za-z_-]{40,})["\']', text, re.I
-        )
-        
-        if not site_key_match:
-            site_key_match = re.search(
-                r'data-sitekey=["\']([0-9A-Za-z]{40})["\']', text, re.I
-            )
-
-        if not site_key_match:
+        if not site_key:
             raise CloudflareTurnstileError('Could not find Turnstile site key')
 
-        site_key = site_key_match.group(1)
-
-        form_action = re.search(
-            r'<form[^>]*action=["\']([^"\']+)', text, re.DOTALL | re.I
-        )
+        form_action = re.search(r'<form [^>]*action="([^"]+)"', resp.text, re.DOTALL)
 
         if form_action:
             form_action_url = form_action.group(1)
         else:
+            # Fall back to the current page URL (without query string / fragment)
             parsed = urlparse(resp.url)
             form_action_url = f'{parsed.scheme}://{parsed.netloc}{parsed.path}'
 
         return {
-            'site_key': site_key,
+            'site_key': site_key.group(1),
             'form_action': form_action_url,
         }
 
@@ -130,19 +115,17 @@ class CloudflareTurnstile:
 
         payload: dict = {'cf-turnstile-response': turnstile_response}
 
+        # Collect any additional hidden form fields from the page
         payload.update({
             name: value
             for name, value in re.findall(
-                r'<input[^>]*name=["\']([^"\']+)["\'][^>]*value=["\']([^"\']*)["\']',
-                resp.text,
-                re.I
+                r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', resp.text
             )
             if name != 'cf-turnstile-response'
         })
 
         url_parsed = urlparse(resp.url)
         challenge_url = turnstile_info['form_action']
-        
         if not challenge_url.startswith('http'):
             challenge_url = f'{url_parsed.scheme}://{url_parsed.netloc}{challenge_url}'
 
