@@ -298,6 +298,11 @@ class CloudScraper(Session):
         # Stealth techniques
         if self.enable_stealth:
             kwargs = self.stealth_mode.apply_stealth_techniques(method, url, **kwargs)
+            # Mirror stealth headers back to session so plugins that read
+            # scraper.headers (e.g. Abyss) still see the full header set.
+            if 'headers' in kwargs:
+                for _k, _v in kwargs['headers'].items():
+                    self.headers.setdefault(_k, _v)
 
         self.request_count += 1
         self.current_concurrent_requests += 1
