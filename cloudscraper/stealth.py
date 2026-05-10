@@ -134,7 +134,7 @@ class StealthMode:
     # ------------------------------------------------------------------------------- #
 
     def _randomize_headers(self, kwargs: dict) -> dict:
-        headers: dict = kwargs.get('headers', {})
+        headers: dict = dict(kwargs.get('headers', {}))  # work on a copy to avoid mutating the caller's dict
 
         headers.setdefault('Accept', random.choice(_ACCEPT_VARIANTS))
         headers.setdefault('Accept-Language', random.choice(_LANGUAGE_VARIANTS))
@@ -152,7 +152,7 @@ class StealthMode:
         browser_type = 'firefox' if 'Firefox/' in user_agent else 'chrome'
 
         quirk = _BROWSER_QUIRKS[browser_type]
-        headers: dict = kwargs.get('headers', {})
+        headers: dict = dict(kwargs.get('headers', {}))  # work on a copy to avoid mutating the caller's dict
 
         for header, value in quirk['headers'].items():
             headers.setdefault(header, value)
