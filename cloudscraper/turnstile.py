@@ -5,36 +5,44 @@ import re
 import time
 import logging
 import random
+from copy import deepcopy
 from urllib.parse import urlparse
 
 # ------------------------------------------------------------------------------- #
 
 from .exceptions import (
+    CloudflareIUAMError,
     CloudflareSolveError,
+    CloudflareChallengeError,
+    CloudflareCaptchaError,
+    CloudflareCaptchaProvider,
     CloudflareTurnstileError,
 )
+
+from .captcha import Captcha
 
 # ------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
 
-MAX_TURNSTILE_RETRIES = 3
+MAX_GC_RETRIES = 3
 
 # ------------------------------------------------------------------------------- #
 
 
 class _TokenInterceptor:
+    """Captures gc_response tokens produced during cloudscraper's internal requests."""
 
     def __init__(self, scraper):
         self._scraper = scraper
-        self._original_request = scraper.request
+        self._original_request = scraper.perform_request
         self.captured_token = None
 
     def __enter__(self):
         original = self._original_request
         interceptor = self
 
-        def patched_request(method, url, **kwargs):
+        def patched(method, url, **kwargs):
             params = kwargs.get('params') or {}
             if isinstance(params, dict):
                 token = params.get('gc_response')
@@ -54,11 +62,11 @@ class _TokenInterceptor:
 
             return original(method, url, **kwargs)
 
-        self._scraper.request = patched_request
+        self._scraper.perform_request = patched
         return self
 
     def __exit__(self, *args):
-        self._scraper.request = self._original_request
+        self._scraper.perform_request = self._original_request
 
 
 # ------------------------------------------------------------------------------- #
@@ -68,18 +76,47 @@ class CloudflareTurnstile:
 
     def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
-        self.delay: float = getattr(cloudscraper, 'delay', random.uniform(2.0, 5.0))
+        self.delay: float = self.cloudscraper.delay or random.uniform(1.0, 5.0)
+        # Optional callable(resp, headers) -> str | None
+        # Set by plugins that resolve gc_response via their own endpoint (e.g. DoodStream).
+        # When set, handle_Turnstile_Challenge routes to handle_GC_Challenge instead.
+        self.token_provider = None
 
     # ------------------------------------------------------------------------------- #
-    # Check if the response contains a Cloudflare Turnstile challenge
+    # Detect a standard Cloudflare Turnstile challenge (captcha provider flow)
     # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_Turnstile_Challenge(resp) -> bool:
         try:
+            return bool(
+                resp.headers.get('Server', '').startswith('cloudflare')
+                and resp.status_code in [403, 429, 503]
+                and (
+                    re.search(r'class="cf-turnstile"', resp.text, re.M | re.S)
+                    or re.search(
+                        r'src="https://challenges\.cloudflare\.com/turnstile/v0/api\.js',
+                        resp.text,
+                        re.M | re.S,
+                    )
+                    or re.search(
+                        r'data-sitekey="[0-9A-Za-z]{40}"',
+                        resp.text,
+                        re.M | re.S,
+                    )
+                )
+            )
+        except AttributeError:
+            return False
+
+    # ------------------------------------------------------------------------------- #
+    # Detect a gc_response-style Turnstile challenge (DoodStream / custom flow)
+    # ------------------------------------------------------------------------------- #
+
+    @staticmethod
+    def is_GC_Challenge(resp) -> bool:
+        try:
             text = resp.text.lower()
-            if 'dsplayer' in text:
-                return False
             return any(x in text for x in [
                 'turnstile.render',
                 'turnstile-container',
@@ -91,123 +128,168 @@ class CloudflareTurnstile:
             return False
 
     # ------------------------------------------------------------------------------- #
-    # Extract sitekey and validation endpoint from challenge page
+    # Extract sitekey and form action from a standard Turnstile challenge page
     # ------------------------------------------------------------------------------- #
 
     def extract_turnstile_data(self, resp) -> dict:
-        text = resp.text
-
-        patterns = [
-            r'sitekey["\']?\s*:\s*["\']([0-9A-Za-z_-]{10,60})["\']',
-            r'sitekey\s*=\s*["\']([0-9A-Za-z_-]{10,60})["\']',
-            r'turnstile\.render\s*\([^)]*["\']([0-9A-Za-z_-]{10,60})["\']',
-            r'["\']0x([0-9A-Za-z_-]{10,58})["\']',
-        ]
-
-        site_key = None
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                candidate = match.group(1)
-                if not candidate.startswith('0x'):
-                    candidate = '0x' + candidate
-                site_key = candidate
-                break
+        site_key = re.search(r'data-sitekey="([0-9A-Za-z]{40})"', resp.text)
 
         if not site_key:
-            self.cloudscraper.simpleException(
-                CloudflareTurnstileError,
-                "Cloudflare Turnstile detected, unfortunately we can't extract the sitekey correctly.",
-            )
+            raise CloudflareTurnstileError('Could not find Turnstile site key')
 
-        validate_match = re.search(r'["\'](/(?:dood|pass)\?op=validate[^"\']*)["\']', text)
-        form_action = validate_match.group(1) if validate_match else '/dood?op=validate'
+        form_action = re.search(r'<form [^>]*action="([^"]+)"', resp.text, re.DOTALL)
+
+        if form_action:
+            form_action_url = form_action.group(1)
+        else:
+            parsed = urlparse(resp.url)
+            form_action_url = f'{parsed.scheme}://{parsed.netloc}{parsed.path}'
 
         return {
-            'site_key': site_key,
-            'form_action': form_action,
-            'page_url': resp.url,
+            'site_key': site_key.group(1),
+            'form_action': form_action_url,
         }
 
     # ------------------------------------------------------------------------------- #
-    # Attempt to handle and send the Turnstile challenge response
+    # Called automatically by cloudscraper's request().
+    # Routes to handle_GC_Challenge when a token_provider is registered,
+    # otherwise uses the standard captcha provider flow.
     # ------------------------------------------------------------------------------- #
 
     def handle_Turnstile_Challenge(self, resp, **kwargs):
+        if self.token_provider:
+            return self.handle_GC_Challenge(resp, **kwargs)
+
+        if (
+            not self.cloudscraper.captcha
+            or not isinstance(self.cloudscraper.captcha, dict)
+            or not self.cloudscraper.captcha.get('provider')
+        ):
+            self.cloudscraper.simpleException(
+                CloudflareCaptchaProvider,
+                'Cloudflare Turnstile detected, but no captcha provider configured',
+            )
+
+        turnstile_info = self.extract_turnstile_data(resp)
+
+        time.sleep(self.delay)
+
+        turnstile_response = Captcha.dynamicImport(
+            self.cloudscraper.captcha.get('provider').lower()
+        ).solveCaptcha(
+            'turnstile',
+            resp.url,
+            turnstile_info['site_key'],
+            self.cloudscraper.captcha,
+        )
+
+        payload: dict = {'cf-turnstile-response': turnstile_response}
+
+        payload.update({
+            name: value
+            for name, value in re.findall(
+                r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', resp.text
+            )
+            if name != 'cf-turnstile-response'
+        })
+
+        url_parsed = urlparse(resp.url)
+        challenge_url = turnstile_info['form_action']
+        if not challenge_url.startswith('http'):
+            challenge_url = f'{url_parsed.scheme}://{url_parsed.netloc}{challenge_url}'
+
+        cloudflare_kwargs = deepcopy(kwargs)
+        cloudflare_kwargs['allow_redirects'] = False
+        cloudflare_kwargs.setdefault('headers', {}).update({
+            'Origin': f'{url_parsed.scheme}://{url_parsed.netloc}',
+            'Referer': resp.url,
+            'Content-Type': 'application/x-www-form-urlencoded',
+        })
+
+        challenge_response = self.cloudscraper.request(
+            'POST', challenge_url, data=payload, **cloudflare_kwargs
+        )
+
+        if challenge_response.status_code == 403:
+            raise CloudflareSolveError('Failed to solve Cloudflare Turnstile challenge')
+
+        return challenge_response
+
+    # ------------------------------------------------------------------------------- #
+    # gc_response flow — used by plugins that obtain the token from a site endpoint.
+    #
+    # Token resolution order:
+    #   1. self.token_provider  — plugin-supplied callable (e.g. DoodStream validate POST)
+    #   2. _TokenInterceptor    — captures gc_response from perform_request internals
+    #   3. cookies              — gc_response / cf_clearance already in session
+    #   4. HTML                 — hidden field or JS variable in challenge page
+    # ------------------------------------------------------------------------------- #
+
+    def handle_GC_Challenge(self, resp, **kwargs):
         base_headers = dict(kwargs.pop('headers', {}) or {})
         parsed = urlparse(resp.url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
 
-        for attempt in range(1, MAX_TURNSTILE_RETRIES + 1):
-            if not self.is_Turnstile_Challenge(resp):
+        for attempt in range(1, MAX_GC_RETRIES + 1):
+            if not self.is_GC_Challenge(resp):
                 return resp
-
-            turnstile_info = self.extract_turnstile_data(resp)
 
             time.sleep(self.delay)
 
-            # ------------------------------------------------------------------------------- #
-            # Intercept gc_response from internal cloudscraper requests
-            # ------------------------------------------------------------------------------- #
-
+            # -- 1. plugin token provider --
             token = None
-            with _TokenInterceptor(self.cloudscraper) as interceptor:
-                try:
-                    self.cloudscraper.get(resp.url, headers=base_headers, **kwargs)
-                except Exception:
-                    pass
-                token = interceptor.captured_token
+            try:
+                token = self.token_provider(resp, base_headers)
+            except Exception:
+                pass
 
-            # ------------------------------------------------------------------------------- #
-            # Fallback: extract from cookies saved by the scraper
-            # ------------------------------------------------------------------------------- #
-
+            # -- 2. intercept from perform_request internals --
             if not token:
-                token = self._extract_from_cookies()
+                with _TokenInterceptor(self.cloudscraper) as interceptor:
+                    try:
+                        self.cloudscraper.perform_request('GET', resp.url, headers=base_headers, **kwargs)
+                    except Exception:
+                        pass
+                    token = interceptor.captured_token
 
-            # ------------------------------------------------------------------------------- #
-            # Fallback: extract from hidden field or JS variable in page HTML
-            # ------------------------------------------------------------------------------- #
-
+            # -- 3. fallback: cookies --
             if not token:
-                token = self._extract_token_from_html(resp.text)
+                token = self._gc_token_from_cookies()
+
+            # -- 4. fallback: HTML --
+            if not token:
+                token = self._gc_token_from_html(resp.text)
 
             if not token:
                 self.cloudscraper.simpleException(
                     CloudflareSolveError,
-                    "Cloudflare Turnstile detected, unfortunately we can't retrieve a valid gc_response token.",
+                    "Cloudflare Turnstile (gc_response) detected, but could not retrieve a valid token.",
                 )
 
-            # ------------------------------------------------------------------------------- #
-            # Send the Turnstile challenge response back to the server
-            # ------------------------------------------------------------------------------- #
+            self.cloudscraper.perform_request(
+                'GET', base_url,
+                params={'gc_response': token},
+                headers={
+                    **base_headers,
+                    'Origin': base_url,
+                    'Referer': resp.url,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                **kwargs,
+            )
 
-            validate_url = base_url + turnstile_info['form_action']
+            resp = self.cloudscraper.perform_request('GET', resp.url, headers=base_headers, **kwargs)
 
-            cloudflare_kwargs = dict(kwargs)
-            cloudflare_kwargs['params'] = {'gc_response': token}
-            cloudflare_kwargs['headers'] = {
-                **base_headers,
-                'Origin': base_url,
-                'Referer': resp.url,
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-
-            self.cloudscraper.request('GET', validate_url, **cloudflare_kwargs)
-
-            resp = self.cloudscraper.request('GET', resp.url, headers=base_headers, **kwargs)
-
-            if not self.is_Turnstile_Challenge(resp):
+            if not self.is_GC_Challenge(resp):
                 return resp
 
             time.sleep(self.delay * attempt)
 
-        # Shouldn't reach here — return last response and let caller handle it.
         return resp
 
     # ------------------------------------------------------------------------------- #
 
-    def _extract_from_cookies(self) -> str | None:
+    def _gc_token_from_cookies(self) -> 'str | None':
         try:
             cookies = self.cloudscraper.cookies.get_dict()
             for key in ('gc_response', 'cf_turnstile_response', 'cf_clearance'):
@@ -218,9 +300,7 @@ class CloudflareTurnstile:
             pass
         return None
 
-    # ------------------------------------------------------------------------------- #
-
-    def _extract_token_from_html(self, html: str) -> str | None:
+    def _gc_token_from_html(self, html: str) -> 'str | None':
         patterns = [
             r'name=["\']gc_response["\'][^>]*value=["\']([^"\']{20,})["\']',
             r'value=["\']([^"\']{20,})["\'][^>]*name=["\']gc_response["\']',
