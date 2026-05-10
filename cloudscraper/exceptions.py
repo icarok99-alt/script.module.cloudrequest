@@ -1,123 +1,89 @@
 # -*- coding: utf-8 -*-
-
-# ------------------------------------------------------------------------------- #
+# Requires Python 3.7+
 
 """
 cloudscraper.exceptions
-~~~~~~~~~~~~~~~~~~~
-This module contains the set of cloudscraper exceptions.
+~~~~~~~~~~~~~~~~~~~~~~~
+Set of exceptions raised by cloudscraper.
 """
 
+# ------------------------------------------------------------------------------- #
+# Cloudflare exceptions
 # ------------------------------------------------------------------------------- #
 
 
 class CloudflareException(Exception):
-    """
-    Base exception class for cloudscraper for Cloudflare
-    """
+    """Base exception class for Cloudflare-related errors."""
 
 
 class CloudflareLoopProtection(CloudflareException):
-    """
-    Raise an exception for recursive depth protection
-    """
+    """Raised when recursive challenge-solving depth is exceeded."""
 
 
 class CloudflareCode1020(CloudflareException):
-    """
-    Raise an exception for Cloudflare code 1020 block
-    """
+    """Raised when Cloudflare returns a Firewall block (Error 1020)."""
 
 
 class CloudflareIUAMError(CloudflareException):
-    """
-    Raise an error for problem extracting IUAM paramters
-    from Cloudflare payload
-    """
+    """Raised when IUAM parameters cannot be extracted from the Cloudflare payload."""
 
 
 class CloudflareChallengeError(CloudflareException):
-    """
-    Raise an error when detected new Cloudflare challenge
-    """
+    """Raised when a new/unsupported Cloudflare challenge type is detected."""
 
 
 class CloudflareSolveError(CloudflareException):
-    """
-    Raise an error when issue with solving Cloudflare challenge
-    """
+    """Raised when a Cloudflare challenge cannot be solved."""
 
 
 class CloudflareCaptchaError(CloudflareException):
-    """
-    Raise an error for problem extracting Captcha paramters
-    from Cloudflare payload
-    """
+    """Raised when Captcha parameters cannot be extracted from the Cloudflare payload."""
 
 
 class CloudflareCaptchaProvider(CloudflareException):
-    """
-    Raise an exception for no Captcha provider loaded for Cloudflare.
-    """
+    """Raised when no Captcha provider is configured but one is required."""
 
 
 class CloudflareTurnstileError(CloudflareException):
-    """
-    Raise an error for problem with Cloudflare Turnstile challenge.
-    """
+    """Raised when the Cloudflare Turnstile challenge cannot be handled."""
 
 
 class CloudflareV3Error(CloudflareException):
-    """
-    Raise an error for problem with Cloudflare v3 JavaScript VM challenge.
-    """
+    """Raised when the Cloudflare v3 JavaScript VM challenge cannot be handled."""
 
+
+# ------------------------------------------------------------------------------- #
+# Captcha provider exceptions
 # ------------------------------------------------------------------------------- #
 
 
 class CaptchaException(Exception):
-    """
-    Base exception class for cloudscraper captcha Providers
-    """
+    """Base exception class for captcha provider errors."""
 
 
 class CaptchaServiceUnavailable(CaptchaException):
-    """
-    Raise an exception for external services that cannot be reached
-    """
+    """Raised when an external captcha service cannot be reached."""
 
 
 class CaptchaAPIError(CaptchaException):
-    """
-    Raise an error for error from API response.
-    """
+    """Raised when the captcha provider API returns an error response."""
 
 
 class CaptchaAccountError(CaptchaException):
-    """
-    Raise an error for captcha provider account problem.
-    """
+    """Raised for captcha provider account-related problems (e.g. insufficient balance)."""
 
 
 class CaptchaTimeout(CaptchaException):
-    """
-    Raise an exception for captcha provider taking too long.
-    """
+    """Raised when the captcha provider takes too long to respond."""
 
 
 class CaptchaParameter(CaptchaException):
-    """
-    Raise an exception for bad or missing Parameter.
-    """
+    """Raised for bad or missing captcha parameters."""
 
 
 class CaptchaBadJobID(CaptchaException):
-    """
-    Raise an exception for invalid job id.
-    """
+    """Raised when the captcha provider returns an invalid job ID."""
 
 
 class CaptchaReportError(CaptchaException):
-    """
-    Raise an error for captcha provider unable to report bad solve.
-    """
+    """Raised when the captcha provider is unable to accept a bad-solve report."""
