@@ -1,50 +1,46 @@
-import re
-import sys
-import base64
+# interpreters/__init__.py
+# Requires Python 3.8+
+
 import abc
+import base64
+import re
 
 from ..exceptions import CloudflareSolveError
 
-if sys.version_info >= (3, 4):
-    ABC = abc.ABC  # noqa
-else:
-    ABC = abc.ABCMeta('ABC', (), {})
-
 # ------------------------------------------------------------------------------- #
 
-interpreters = {}
+interpreters: dict = {}
 
 # ------------------------------------------------------------------------------- #
 
 
-class JavaScriptInterpreter(ABC):
-
-    # ------------------------------------------------------------------------------- #
+class JavaScriptInterpreter(abc.ABC):
 
     @abc.abstractmethod
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
         interpreters[name] = self
 
     # ------------------------------------------------------------------------------- #
 
     @classmethod
-    def dynamicImport(cls, name=None):
+    def dynamicImport(cls, name: str = None) -> 'JavaScriptInterpreter':
         return interpreters['native']
 
     # ------------------------------------------------------------------------------- #
 
     @abc.abstractmethod
-    def eval(self, body, domain):
+    def eval(self, body: str, domain: str):
         pass
 
     # ------------------------------------------------------------------------------- #
 
-    def solveChallenge(self, body, domain):
+    def solveChallenge(self, body: str, domain: str) -> str:
         try:
-            return '{0:.10f}'.format(float(self.eval(body, domain)))
+            return '{:.10f}'.format(float(self.eval(body, domain)))
         except Exception:
             raise CloudflareSolveError(
-                'Error trying to solve Cloudflare IUAM Javascript, they may have changed their technique.'
+                'Error trying to solve Cloudflare IUAM Javascript — '
+                'they may have changed their technique.'
             )
 
 
@@ -68,15 +64,16 @@ _IUAM_PATTERNS = [
 ]
 
 
-def _browser_stubs(domain):
+def _browser_stubs(domain: str) -> str:
     d = domain
     return (
         "var window = {}; var global = window; var self = window;"
-        "var location = { href: 'https://" + d + "/', hostname: '" + d + "', protocol: 'https:', pathname: '/' };"
-        "var navigator = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', platform: 'Win32', language: 'en-US' };"
+        f"var location = {{ href: 'https://{d}/', hostname: '{d}', protocol: 'https:', pathname: '/' }};"
+        "var navigator = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',"
+        " platform: 'Win32', language: 'en-US' };"
         "var document = {"
-        "    getElementById: function(id) { return { value: 0, innerHTML: '', style: {} }; },"
-        "    createElement:  function(tag) { return { firstChild: { href: 'https://" + d + "/' }, style: {} }; }"
+        f"    getElementById: function(id) {{ return {{ value: 0, innerHTML: '', style: {{}} }}; }},"
+        f"    createElement:  function(tag) {{ return {{ firstChild: {{ href: 'https://{d}/' }}, style: {{}} }}; }}"
         "};"
         "var console = { log: function() {}, warn: function() {}, error: function() {} };"
         "var a = { value: 0 };"
@@ -93,15 +90,15 @@ class _NativeInterpreter(JavaScriptInterpreter):
     Registered as 'native' — the only interpreter this project uses.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         from .js_engine import Interpreter, to_string as _ts
         self._Interpreter = Interpreter
-        self._to_string   = _ts
+        self._to_string = _ts
         interpreters['native'] = self
 
     # ------------------------------------------------------------------------------- #
 
-    def eval(self, body, domain):
+    def eval(self, body: str, domain: str):
         """Execute JS source in a browser-stub context. Returns raw Python value."""
         ctx = self._Interpreter()
         ctx.define('atob', lambda s: base64.b64decode(self._to_string(s)).decode('utf-8'))
@@ -111,8 +108,8 @@ class _NativeInterpreter(JavaScriptInterpreter):
 
     # ------------------------------------------------------------------------------- #
 
-    def solveChallenge(self, body, domain):
-        """Extract and solve the IUAM JS block. Returns formatted float string."""
+    def solveChallenge(self, body: str, domain: str) -> str:
+        """Extract and solve the IUAM JS block. Returns a formatted float string."""
         js_block = None
         for pat in _IUAM_PATTERNS:
             m = pat.search(body)
@@ -128,7 +125,7 @@ class _NativeInterpreter(JavaScriptInterpreter):
         js_block = re.sub(r'document\.getElementById\([^)]*\)', '{ value: 0 }', js_block)
         js_block = re.sub(
             r'document\.createElement\([^)]*\)',
-            "{ firstChild: { href: 'https://" + domain + "/' } }",
+            f"{{ firstChild: {{ href: 'https://{domain}/' }} }}",
             js_block,
         )
         js_block = re.sub(r'\.submit\s*\(\s*\)', '', js_block)
@@ -141,7 +138,7 @@ class _NativeInterpreter(JavaScriptInterpreter):
         a_obj = ctx.get('a')
         if isinstance(a_obj, dict) and 'value' in a_obj:
             try:
-                return '{0:.10f}'.format(
+                return '{:.10f}'.format(
                     float(self._to_string(a_obj['value'])) + len(domain)
                 )
             except (ValueError, TypeError):
