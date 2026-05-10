@@ -1,178 +1,188 @@
-import random
+# Proxy Manager
+# Requires Python 3.7+
+
+from __future__ import annotations
+
 import logging
+import random
 import time
-from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Literal, Optional, Union
+
+# ------------------------------------------------------------------------------- #
+
+logger = logging.getLogger(__name__)
+
+RotationStrategy = Literal['sequential', 'random', 'smart']
+
+
+@dataclass
+class _ProxyStat:
+    success: int = 0
+    failure: int = 0
+    last_used: float = 0.0
+
+    @property
+    def success_rate(self) -> float:
+        total = self.success + self.failure
+        return self.success / total if total else 0.0
+
 
 # ------------------------------------------------------------------------------- #
 
 
 class ProxyManager:
-    """
-    A class to manage and rotate proxies for CloudScraper
-    """
+    """Manage and rotate proxies for CloudScraper."""
 
-    def __init__(self, proxies=None, proxy_rotation_strategy='sequential', ban_time=300):
+    def __init__(
+        self,
+        proxies: Optional[Union[List[str], Dict[str, str], str]] = None,
+        proxy_rotation_strategy: RotationStrategy = 'sequential',
+        ban_time: float = 300.0,
+    ) -> None:
         """
-        Initialize the proxy manager
-        
-        :param proxies: List of proxy URLs or dict mapping URL schemes to proxy URLs
-        :param proxy_rotation_strategy: Strategy for rotating proxies ('sequential', 'random', or 'smart')
-        :param ban_time: Time in seconds to ban a proxy after a failure (for 'smart' strategy)
+        :param proxies: List of proxy URLs, a dict mapping URL schemes to proxy
+                        URLs, or a single proxy URL string.
+        :param proxy_rotation_strategy: One of 'sequential', 'random', or 'smart'.
+        :param ban_time: Seconds to temporarily ban a proxy after a failure.
         """
-        self.proxies = []
-        self.current_index = 0
-        self.rotation_strategy = proxy_rotation_strategy
-        self.ban_time = ban_time
-        self.banned_proxies = {}
-        self.proxy_stats = defaultdict(lambda: {'success': 0, 'failure': 0, 'last_used': 0})
-        
-        # Process the provided proxies
-        if proxies:
-            if isinstance(proxies, list):
-                self.proxies = proxies
-            elif isinstance(proxies, dict):
-                # Extract unique proxy URLs from the dict
-                for scheme, proxy in proxies.items():
-                    if proxy and proxy not in self.proxies:
-                        self.proxies.append(proxy)
-            elif isinstance(proxies, str):
-                self.proxies = [proxies]
-                
-        logging.debug(f"ProxyManager initialized with {len(self.proxies)} proxies using '{proxy_rotation_strategy}' strategy")
+        self.rotation_strategy: RotationStrategy = proxy_rotation_strategy
+        self.ban_time: float = ban_time
+
+        self._proxies: list[str] = []
+        self._current_index: int = 0
+        self._banned: dict[str, float] = {}   # proxy_url → ban timestamp
+        self._stats: dict[str, _ProxyStat] = {}
+
+        self._load_proxies(proxies)
+
+        logger.debug(
+            "ProxyManager initialised with %d proxies using '%s' strategy.",
+            len(self._proxies),
+            proxy_rotation_strategy,
+        )
 
     # ------------------------------------------------------------------------------- #
 
-    def get_proxy(self):
-        """
-        Get the next proxy according to the rotation strategy
-        
-        :return: A proxy URL or dict mapping URL schemes to proxy URLs
-        """
-        if not self.proxies:
+    def _load_proxies(
+        self, proxies: Optional[Union[List[str], Dict[str, str], str]]
+    ) -> None:
+        if not proxies:
+            return
+        if isinstance(proxies, str):
+            self._proxies = [proxies]
+        elif isinstance(proxies, list):
+            self._proxies = list(proxies)
+        elif isinstance(proxies, dict):
+            seen: set[str] = set()
+            for proxy in proxies.values():
+                if proxy and proxy not in seen:
+                    self._proxies.append(proxy)
+                    seen.add(proxy)
+
+    # ------------------------------------------------------------------------------- #
+
+    def _is_available(self, proxy: str) -> bool:
+        ban_ts = self._banned.get(proxy)
+        return ban_ts is None or (time.monotonic() - ban_ts) > self.ban_time
+
+    def _available_proxies(self) -> list[str]:
+        return [p for p in self._proxies if self._is_available(p)]
+
+    def _stat(self, proxy: str) -> _ProxyStat:
+        if proxy not in self._stats:
+            self._stats[proxy] = _ProxyStat()
+        return self._stats[proxy]
+
+    # ------------------------------------------------------------------------------- #
+
+    def get_proxy(self) -> Optional[Dict[str, str]]:
+        """Return the next proxy as a ``{'http': ..., 'https': ...}`` dict."""
+        if not self._proxies:
             return None
-            
-        # Filter out banned proxies
-        available_proxies = [p for p in self.proxies if p not in self.banned_proxies or 
-                            time.time() - self.banned_proxies[p] > self.ban_time]
-        
-        if not available_proxies:
-            logging.warning("All proxies are currently banned. Using the least recently banned one.")
-            # Use the least recently banned proxy
-            proxy = min(self.banned_proxies.items(), key=lambda x: x[1])[0]
-            # Reset its ban time
-            self.banned_proxies.pop(proxy)
-            return self._format_proxy(proxy)
-        
-        # Choose a proxy based on the strategy
+
+        available = self._available_proxies()
+
+        if not available:
+            logger.warning('All proxies are banned. Unbanning the least recently banned one.')
+            proxy = min(self._banned, key=self._banned.__getitem__)
+            del self._banned[proxy]
+            available = [proxy]
+
         if self.rotation_strategy == 'random':
-            proxy = random.choice(available_proxies)
+            proxy = random.choice(available)
         elif self.rotation_strategy == 'smart':
-            # Choose the proxy with the best success rate
-            proxy = max(available_proxies, 
-                        key=lambda p: (self.proxy_stats[p]['success'] / 
-                                      (self.proxy_stats[p]['success'] + self.proxy_stats[p]['failure'] + 0.1)))
+            proxy = max(available, key=lambda p: self._stat(p).success_rate)
         else:  # sequential
-            if self.current_index >= len(available_proxies):
-                self.current_index = 0
-            proxy = available_proxies[self.current_index]
-            self.current_index += 1
-            
-        # Update last used time
-        self.proxy_stats[proxy]['last_used'] = time.time()
-        
+            self._current_index %= len(available)
+            proxy = available[self._current_index]
+            self._current_index += 1
+
+        self._stat(proxy).last_used = time.monotonic()
         return self._format_proxy(proxy)
 
     # ------------------------------------------------------------------------------- #
 
-    def _format_proxy(self, proxy):
-        """
-        Format the proxy as a dict for requests
-        
-        :param proxy: Proxy URL
-        :return: Dict mapping URL schemes to proxy URLs
-        """
-        if proxy.startswith('http://') or proxy.startswith('https://'):
+    @staticmethod
+    def _format_proxy(proxy: str) -> Dict[str, str]:
+        if proxy.startswith(('http://', 'https://')):
             return {'http': proxy, 'https': proxy}
-        else:
-            return {'http': f'http://{proxy}', 'https': f'http://{proxy}'}
+        normalised = f'http://{proxy}'
+        return {'http': normalised, 'https': normalised}
 
-    # ------------------------------------------------------------------------------- #
-
-    def report_success(self, proxy):
-        """
-        Report a successful request with the proxy
-        
-        :param proxy: The proxy that was used
-        """
+    @staticmethod
+    def _extract_url(proxy: Union[Dict[str, str], str]) -> Optional[str]:
         if isinstance(proxy, dict):
-            # Extract the proxy URL from the dict
-            proxy_url = proxy.get('https') or proxy.get('http')
-        else:
-            proxy_url = proxy
-            
-        if proxy_url:
-            self.proxy_stats[proxy_url]['success'] += 1
-            if proxy_url in self.banned_proxies:
-                del self.banned_proxies[proxy_url]
+            return proxy.get('https') or proxy.get('http')
+        return proxy
 
     # ------------------------------------------------------------------------------- #
 
-    def report_failure(self, proxy):
-        """
-        Report a failed request with the proxy
-        
-        :param proxy: The proxy that was used
-        """
-        if isinstance(proxy, dict):
-            # Extract the proxy URL from the dict
-            proxy_url = proxy.get('https') or proxy.get('http')
-        else:
-            proxy_url = proxy
-            
-        if proxy_url:
-            self.proxy_stats[proxy_url]['failure'] += 1
-            self.banned_proxies[proxy_url] = time.time()
+    def report_success(self, proxy: Union[Dict[str, str], str]) -> None:
+        """Record a successful request for *proxy*."""
+        url = self._extract_url(proxy)
+        if url:
+            self._stat(url).success += 1
+            self._banned.pop(url, None)
+
+    def report_failure(self, proxy: Union[Dict[str, str], str]) -> None:
+        """Record a failed request for *proxy* and temporarily ban it."""
+        url = self._extract_url(proxy)
+        if url:
+            self._stat(url).failure += 1
+            self._banned[url] = time.monotonic()
 
     # ------------------------------------------------------------------------------- #
 
-    def add_proxy(self, proxy):
-        """
-        Add a new proxy to the pool
-        
-        :param proxy: Proxy URL to add
-        """
-        if proxy not in self.proxies:
-            self.proxies.append(proxy)
-            logging.debug(f"Added proxy: {proxy}")
+    def add_proxy(self, proxy: str) -> None:
+        """Add *proxy* to the pool (no-op if already present)."""
+        if proxy not in self._proxies:
+            self._proxies.append(proxy)
+            logger.debug('Added proxy: %s', proxy)
+
+    def remove_proxy(self, proxy: str) -> None:
+        """Remove *proxy* from the pool."""
+        if proxy in self._proxies:
+            self._proxies.remove(proxy)
+            self._banned.pop(proxy, None)
+            self._stats.pop(proxy, None)
+            logger.debug('Removed proxy: %s', proxy)
 
     # ------------------------------------------------------------------------------- #
 
-    def remove_proxy(self, proxy):
-        """
-        Remove a proxy from the pool
-        
-        :param proxy: Proxy URL to remove
-        """
-        if proxy in self.proxies:
-            self.proxies.remove(proxy)
-            if proxy in self.banned_proxies:
-                del self.banned_proxies[proxy]
-            if proxy in self.proxy_stats:
-                del self.proxy_stats[proxy]
-            logging.debug(f"Removed proxy: {proxy}")
-
-    # ------------------------------------------------------------------------------- #
-
-    def get_stats(self):
-        """
-        Get statistics about proxy usage
-        
-        :return: Dict with proxy statistics
-        """
+    def get_stats(self) -> dict:
+        """Return a summary of proxy pool statistics."""
         return {
-            'total_proxies': len(self.proxies),
-            'available_proxies': len([p for p in self.proxies if p not in self.banned_proxies or 
-                                     time.time() - self.banned_proxies[p] > self.ban_time]),
-            'banned_proxies': len(self.banned_proxies),
-            'proxy_stats': dict(self.proxy_stats)
+            'total_proxies': len(self._proxies),
+            'available_proxies': len(self._available_proxies()),
+            'banned_proxies': len(self._banned),
+            'proxy_stats': {
+                url: {
+                    'success': s.success,
+                    'failure': s.failure,
+                    'success_rate': round(s.success_rate, 4),
+                    'last_used': s.last_used,
+                }
+                for url, s in self._stats.items()
+            },
         }
