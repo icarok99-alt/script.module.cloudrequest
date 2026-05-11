@@ -1,3 +1,6 @@
+# cloudscraper
+# Requires Python 3.7+
+
 import json
 import logging
 import os
