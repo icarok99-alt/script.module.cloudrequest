@@ -1,3 +1,6 @@
+# js_engine
+# Requires Python 3.7+
+
 from __future__ import annotations
 import re
 import math
