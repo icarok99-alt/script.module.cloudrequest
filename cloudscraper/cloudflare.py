@@ -1,13 +1,28 @@
 # Cloudflare V1
-# Requires Python 3.7+
 
-import html
 import re
+import sys
 import time
-import logging
 
 from copy import deepcopy
-from urllib.parse import urlparse, urljoin
+from collections import OrderedDict
+
+# ------------------------------------------------------------------------------- #
+
+try:
+    from HTMLParser import HTMLParser
+except ImportError:
+    if sys.version_info >= (3, 4):
+        import html
+    else:
+        from html.parser import HTMLParser
+
+try:
+    from urlparse import urlparse, urljoin
+except ImportError:
+    from urllib.parse import urlparse, urljoin
+
+# ------------------------------------------------------------------------------- #
 
 from .exceptions import (
     CloudflareCode1020,
@@ -15,117 +30,160 @@ from .exceptions import (
     CloudflareSolveError,
     CloudflareChallengeError,
     CloudflareCaptchaError,
-    CloudflareCaptchaProvider,
+    CloudflareCaptchaProvider
 )
+
+# ------------------------------------------------------------------------------- #
 
 from .captcha import Captcha
 from .interpreters import JavaScriptInterpreter
 
-logger = logging.getLogger(__name__)
+# ------------------------------------------------------------------------------- #
 
-class Cloudflare:
 
-    def __init__(self, cloudscraper) -> None:
+class Cloudflare():
+
+    def __init__(self, cloudscraper):
         self.cloudscraper = cloudscraper
 
-    @staticmethod
-    def unescape(html_text: str) -> str:
-        return html.unescape(html_text)
+    # ------------------------------------------------------------------------------- #
+    # Unescape / decode html entities
+    # ------------------------------------------------------------------------------- #
 
     @staticmethod
-    def is_IUAM_Challenge(resp) -> bool:
+    def unescape(html_text):
+        if sys.version_info >= (3, 0):
+            if sys.version_info >= (3, 4):
+                return html.unescape(html_text)
+
+            return HTMLParser().unescape(html_text)
+
+        return HTMLParser().unescape(html_text)
+
+    # ------------------------------------------------------------------------------- #
+    # check if the response contains a valid Cloudflare challenge
+    # ------------------------------------------------------------------------------- #
+
+    @staticmethod
+    def is_IUAM_Challenge(resp):
         try:
-            return bool(
+            return (
                 resp.headers.get('Server', '').startswith('cloudflare')
                 and resp.status_code in [429, 503]
                 and re.search(r'/cdn-cgi/images/trace/jsch/', resp.text, re.M | re.S)
                 and re.search(
                     r'''<form .*?="challenge-form" action="/\S+__cf_chl_f_tk=''',
                     resp.text,
-                    re.M | re.S,
+                    re.M | re.S
                 )
             )
         except AttributeError:
-            return False
+            pass
 
-    def is_New_IUAM_Challenge(self, resp) -> bool:
+        return False
+
+    # ------------------------------------------------------------------------------- #
+    # check if the response contains new Cloudflare challenge
+    # ------------------------------------------------------------------------------- #
+
+    def is_New_IUAM_Challenge(self, resp):
         try:
-            return bool(
+            return (
                 self.is_IUAM_Challenge(resp)
                 and re.search(
                     r'''cpo.src\s*=\s*['"]/cdn-cgi/challenge-platform/\S+orchestrate/jsch/v1''',
                     resp.text,
-                    re.M | re.S,
+                    re.M | re.S
                 )
             )
         except AttributeError:
-            return False
+            pass
 
-    def is_New_Captcha_Challenge(self, resp) -> bool:
+        return False
+
+    # ------------------------------------------------------------------------------- #
+    # check if the response contains a v2 hCaptcha Cloudflare challenge
+    # ------------------------------------------------------------------------------- #
+
+    def is_New_Captcha_Challenge(self, resp):
         try:
-            return bool(
+            return (
                 self.is_Captcha_Challenge(resp)
                 and re.search(
                     r'''cpo.src\s*=\s*['"]/cdn-cgi/challenge-platform/\S+orchestrate/(captcha|managed)/v1''',
                     resp.text,
-                    re.M | re.S,
+                    re.M | re.S
                 )
             )
         except AttributeError:
-            return False
+            pass
+
+        return False
+
+    # ------------------------------------------------------------------------------- #
+    # check if the response contains a Cloudflare hCaptcha challenge
+    # ------------------------------------------------------------------------------- #
 
     @staticmethod
-    def is_Captcha_Challenge(resp) -> bool:
+    def is_Captcha_Challenge(resp):
         try:
-            return bool(
+            return (
                 resp.headers.get('Server', '').startswith('cloudflare')
                 and resp.status_code == 403
-                and re.search(
-                    r'/cdn-cgi/images/trace/(captcha|managed)/', resp.text, re.M | re.S
-                )
+                and re.search(r'/cdn-cgi/images/trace/(captcha|managed)/', resp.text, re.M | re.S)
                 and re.search(
                     r'''<form .*?="challenge-form" action="/\S+__cf_chl_f_tk=''',
                     resp.text,
-                    re.M | re.S,
+                    re.M | re.S
                 )
             )
         except AttributeError:
-            return False
+            pass
+
+        return False
+
+    # ------------------------------------------------------------------------------- #
+    # check if the response contains Firewall 1020 Error
+    # ------------------------------------------------------------------------------- #
 
     @staticmethod
-    def is_Firewall_Blocked(resp) -> bool:
+    def is_Firewall_Blocked(resp):
         try:
-            return bool(
+            return (
                 resp.headers.get('Server', '').startswith('cloudflare')
                 and resp.status_code == 403
                 and re.search(
                     r'<span class="cf-error-code">1020</span>',
                     resp.text,
-                    re.M | re.DOTALL,
+                    re.M | re.DOTALL
                 )
             )
         except AttributeError:
-            return False
+            pass
 
-    def is_Challenge_Request(self, resp) -> bool:
+        return False
+
+    # ------------------------------------------------------------------------------- #
+    # Wrapper for is_Captcha_Challenge, is_IUAM_Challenge, is_Firewall_Blocked
+    # ------------------------------------------------------------------------------- #
+
+    def is_Challenge_Request(self, resp):
         if self.is_Firewall_Blocked(resp):
             self.cloudscraper.simpleException(
                 CloudflareCode1020,
-                'Cloudflare has blocked this request (Code 1020 Detected).',
+                'Cloudflare has blocked this request (Code 1020 Detected).'
             )
 
         if self.is_New_Captcha_Challenge(resp):
             self.cloudscraper.simpleException(
                 CloudflareChallengeError,
-                'Detected a Cloudflare version 2 Captcha challenge. '
-                'This feature is not available in the open-source (free) version.',
+                'Detected a Cloudflare version 2 Captcha challenge, This feature is not available in the opensource (free) version.'
             )
 
         if self.is_New_IUAM_Challenge(resp):
             self.cloudscraper.simpleException(
                 CloudflareChallengeError,
-                'Detected a Cloudflare version 2 challenge. '
-                'This feature is not available in the open-source (free) version.',
+                'Detected a Cloudflare version 2 challenge, This feature is not available in the opensource (free) version.'
             )
 
         if self.is_Captcha_Challenge(resp) or self.is_IUAM_Challenge(resp):
@@ -135,143 +193,147 @@ class Cloudflare:
 
         return False
 
-    def IUAM_Challenge_Response(self, body: str, url: str, interpreter: str) -> dict:
+    # ------------------------------------------------------------------------------- #
+    # Try to solve cloudflare javascript challenge.
+    # ------------------------------------------------------------------------------- #
+
+    def IUAM_Challenge_Response(self, body, url, interpreter):
         try:
-            form_payload = re.search(
+            formPayload = re.search(
                 r'<form (?P<form>.*?="challenge-form" '
                 r'action="(?P<challengeUUID>.*?'
                 r'__cf_chl_f_tk=\S+)"(.*?)</form>)',
                 body,
-                re.M | re.DOTALL,
-            )
+                re.M | re.DOTALL
+            ).groupdict()
 
-            if not form_payload:
+            if not all(key in formPayload for key in ['form', 'challengeUUID']):
                 self.cloudscraper.simpleException(
                     CloudflareIUAMError,
-                    "Cloudflare IUAM detected, unfortunately we can't extract the parameters correctly.",
+                    "Cloudflare IUAM detected, unfortunately we can't extract the parameters correctly."
                 )
 
-            form_payload = form_payload.groupdict()
-
-            if not all(key in form_payload for key in ['form', 'challengeUUID']):
-                self.cloudscraper.simpleException(
-                    CloudflareIUAMError,
-                    "Cloudflare IUAM detected, unfortunately we can't extract the parameters correctly.",
-                )
-
-            payload = {}
-            for challenge_param in re.findall(
-                r'^\s*<input\s(.*?)/>', form_payload['form'], re.M | re.S
-            ):
-                input_payload = dict(re.findall(r'(\S+)="(\S+)"', challenge_param))
-                if input_payload.get('name') in ['r', 'jschl_vc', 'pass']:
-                    payload[input_payload['name']] = input_payload['value']
+            payload = OrderedDict()
+            for challengeParam in re.findall(r'^\s*<input\s(.*?)/>', formPayload['form'], re.M | re.S):
+                inputPayload = dict(re.findall(r'(\S+)="(\S+)"', challengeParam))
+                if inputPayload.get('name') in ['r', 'jschl_vc', 'pass']:
+                    payload.update({inputPayload['name']: inputPayload['value']})
 
         except AttributeError:
             self.cloudscraper.simpleException(
                 CloudflareIUAMError,
-                "Cloudflare IUAM detected, unfortunately we can't extract the parameters correctly.",
+                "Cloudflare IUAM detected, unfortunately we can't extract the parameters correctly."
             )
 
-        host_parsed = urlparse(url)
+        hostParsed = urlparse(url)
 
         try:
             payload['jschl_answer'] = JavaScriptInterpreter.dynamicImport(
                 interpreter
-            ).solveChallenge(body, host_parsed.netloc)
-        except Exception as exc:
+            ).solveChallenge(body, hostParsed.netloc)
+        except Exception as e:
             self.cloudscraper.simpleException(
                 CloudflareIUAMError,
-                f"Unable to parse Cloudflare anti-bots page: {getattr(exc, 'message', exc)}",
+                f"Unable to parse Cloudflare anti-bots page: {getattr(e, 'message', e)}"
             )
 
         return {
-            'url': (
-                f"{host_parsed.scheme}://{host_parsed.netloc}"
-                f"{self.unescape(form_payload['challengeUUID'])}"
-            ),
-            'data': payload,
+            'url': f"{hostParsed.scheme}://{hostParsed.netloc}{self.unescape(formPayload['challengeUUID'])}",
+            'data': payload
         }
 
-    def captcha_Challenge_Response(
-        self, provider: str, provider_params: dict, body: str, url: str
-    ) -> dict:
+    # ------------------------------------------------------------------------------- #
+    #  Try to solve the Captcha challenge via 3rd party.
+    # ------------------------------------------------------------------------------- #
+
+    def captcha_Challenge_Response(self, provider, provider_params, body, url):
         try:
-            form_payload = re.search(
+            formPayload = re.search(
                 r'<form (?P<form>.*?="challenge-form" '
                 r'action="(?P<challengeUUID>.*?__cf_chl_captcha_tk__=\S+)"(.*?)</form>)',
                 body,
-                re.M | re.DOTALL,
-            )
+                re.M | re.DOTALL
+            ).groupdict()
 
-            if not form_payload:
+            if not all(key in formPayload for key in ['form', 'challengeUUID']):
                 self.cloudscraper.simpleException(
                     CloudflareCaptchaError,
-                    "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly.",
+                    "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly."
                 )
 
-            form_payload = form_payload.groupdict()
-
-            if not all(key in form_payload for key in ['form', 'challengeUUID']):
-                self.cloudscraper.simpleException(
-                    CloudflareCaptchaError,
-                    "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly.",
-                )
-
-            payload = dict(
+            payload = OrderedDict(
                 re.findall(
                     r'(name="r"\svalue|data-ray|data-sitekey|name="cf_captcha_kind"\svalue)="(.*?)"',
-                    form_payload['form'],
+                    formPayload['form']
                 )
             )
 
-            captcha_type = (
-                'reCaptcha' if payload['name="cf_captcha_kind" value'] == 're' else 'hCaptcha'
-            )
+            captchaType = 'reCaptcha' if payload['name="cf_captcha_kind" value'] == 're' else 'hCaptcha'
 
         except (AttributeError, KeyError):
             self.cloudscraper.simpleException(
                 CloudflareCaptchaError,
-                "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly.",
+                "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly."
             )
 
-        if (
-            self.cloudscraper.proxies
-            and self.cloudscraper.proxies != self.cloudscraper.captcha.get('proxy')
-        ):
-            self.cloudscraper.captcha['proxy'] = self.cloudscraper.proxies
+        # ------------------------------------------------------------------------------- #
+        # Pass proxy parameter to provider to solve captcha.
+        # ------------------------------------------------------------------------------- #
+
+        if self.cloudscraper.proxies and self.cloudscraper.proxies != self.cloudscraper.captcha.get('proxy'):
+            self.cloudscraper.captcha['proxy'] = self.proxies
+
+        # ------------------------------------------------------------------------------- #
+        # Pass User-Agent if provider supports it to solve captcha.
+        # ------------------------------------------------------------------------------- #
 
         self.cloudscraper.captcha['User-Agent'] = self.cloudscraper.headers['User-Agent']
 
-        captcha_response = Captcha.dynamicImport(provider.lower()).solveCaptcha(
-            captcha_type,
+        # ------------------------------------------------------------------------------- #
+        # Submit job to provider to request captcha solve.
+        # ------------------------------------------------------------------------------- #
+
+        captchaResponse = Captcha.dynamicImport(
+            provider.lower()
+        ).solveCaptcha(
+            captchaType,
             url,
             payload['data-sitekey'],
-            provider_params,
+            provider_params
         )
 
-        data_payload = {
-            'r': payload.get('name="r" value', ''),
-            'cf_captcha_kind': payload['name="cf_captcha_kind" value'],
-            'id': payload.get('data-ray'),
-            'g-recaptcha-response': captcha_response,
-        }
+        # ------------------------------------------------------------------------------- #
+        # Parse and handle the response of solved captcha.
+        # ------------------------------------------------------------------------------- #
 
-        if captcha_type == 'hCaptcha':
-            data_payload['h-captcha-response'] = captcha_response
+        dataPayload = OrderedDict([
+            ('r', payload.get('name="r" value', '')),
+            ('cf_captcha_kind', payload['name="cf_captcha_kind" value']),
+            ('id', payload.get('data-ray')),
+            ('g-recaptcha-response', captchaResponse)
+        ])
 
-        host_parsed = urlparse(url)
+        if captchaType == 'hCaptcha':
+            dataPayload.update({'h-captcha-response': captchaResponse})
+
+        hostParsed = urlparse(url)
 
         return {
-            'url': (
-                f"{host_parsed.scheme}://{host_parsed.netloc}"
-                f"{self.unescape(form_payload['challengeUUID'])}"
-            ),
-            'data': data_payload,
+            'url': f"{hostParsed.scheme}://{hostParsed.netloc}{self.unescape(formPayload['challengeUUID'])}",
+            'data': dataPayload
         }
+
+    # ------------------------------------------------------------------------------- #
+    # Attempt to handle and send the challenge response back to cloudflare
+    # ------------------------------------------------------------------------------- #
 
     def Challenge_Response(self, resp, **kwargs):
         if self.is_Captcha_Challenge(resp):
+            # ------------------------------------------------------------------------------- #
+            # double down on the request as some websites are only checking
+            # if cfuid is populated before issuing Captcha.
+            # ------------------------------------------------------------------------------- #
+
             if self.cloudscraper.doubleDown:
                 resp = self.cloudscraper.decodeBrotli(
                     self.cloudscraper.perform_request(resp.request.method, resp.url, **kwargs)
@@ -280,6 +342,10 @@ class Cloudflare:
             if not self.is_Captcha_Challenge(resp):
                 return resp
 
+            # ------------------------------------------------------------------------------- #
+            # if no captcha provider raise a runtime error.
+            # ------------------------------------------------------------------------------- #
+
             if (
                 not self.cloudscraper.captcha
                 or not isinstance(self.cloudscraper.captcha, dict)
@@ -287,103 +353,138 @@ class Cloudflare:
             ):
                 self.cloudscraper.simpleException(
                     CloudflareCaptchaProvider,
-                    "Cloudflare Captcha detected, unfortunately you haven't loaded an "
-                    "anti-Captcha provider correctly via the 'captcha' parameter.",
+                    "Cloudflare Captcha detected, unfortunately you haven't loaded an anti Captcha provider "
+                    "correctly via the 'captcha' parameter."
                 )
+
+            # ------------------------------------------------------------------------------- #
+            # if provider is return_response, return the response without doing anything.
+            # ------------------------------------------------------------------------------- #
 
             if self.cloudscraper.captcha.get('provider') == 'return_response':
                 return resp
+
+            # ------------------------------------------------------------------------------- #
+            # Submit request to parser wrapper to solve captcha
+            # ------------------------------------------------------------------------------- #
 
             submit_url = self.captcha_Challenge_Response(
                 self.cloudscraper.captcha.get('provider'),
                 self.cloudscraper.captcha,
                 resp.text,
-                resp.url,
+                resp.url
             )
         else:
+            # ------------------------------------------------------------------------------- #
             # Cloudflare requires a delay before solving the challenge
+            # ------------------------------------------------------------------------------- #
+
             if not self.cloudscraper.delay:
                 try:
-                    delay = (
-                        float(
-                            re.search(
-                                r'submit\(\);\r?\n\s*},\s*([0-9]+)',
-                                resp.text,
-                            ).group(1)
-                        )
-                        / 1000.0
-                    )
+                    delay = float(
+                        re.search(
+                            r'submit\(\);\r?\n\s*},\s*([0-9]+)',
+                            resp.text
+                        ).group(1)
+                    ) / float(1000)
                     if isinstance(delay, (int, float)):
                         self.cloudscraper.delay = delay
                 except (AttributeError, ValueError):
                     self.cloudscraper.simpleException(
                         CloudflareIUAMError,
-                        'Cloudflare IUAM possibly malformed, issue extracting delay value.',
+                        "Cloudflare IUAM possibility malformed, issue extracing delay value."
                     )
 
             time.sleep(self.cloudscraper.delay)
 
+            # ------------------------------------------------------------------------------- #
+
             submit_url = self.IUAM_Challenge_Response(
                 resp.text,
                 resp.url,
-                self.cloudscraper.interpreter,
+                self.cloudscraper.interpreter
             )
+
+        # ------------------------------------------------------------------------------- #
+        # Send the Challenge Response back to Cloudflare
+        # ------------------------------------------------------------------------------- #
 
         if submit_url:
 
-            def update_attr(obj: dict, name: str, new_value: dict) -> dict:
-                obj.setdefault(name, {}).update(new_value)
-                return obj[name]
+            def updateAttr(obj, name, newValue):
+                try:
+                    obj[name].update(newValue)
+                    return obj[name]
+                except (AttributeError, KeyError):
+                    obj[name] = {}
+                    obj[name].update(newValue)
+                    return obj[name]
 
             cloudflare_kwargs = deepcopy(kwargs)
             cloudflare_kwargs['allow_redirects'] = False
-            cloudflare_kwargs['data'] = update_attr(
-                cloudflare_kwargs, 'data', submit_url['data']
+            cloudflare_kwargs['data'] = updateAttr(
+                cloudflare_kwargs,
+                'data',
+                submit_url['data']
             )
 
-            url_parsed = urlparse(resp.url)
-            cloudflare_kwargs['headers'] = update_attr(
+            urlParsed = urlparse(resp.url)
+            cloudflare_kwargs['headers'] = updateAttr(
                 cloudflare_kwargs,
                 'headers',
                 {
-                    'Origin': f'{url_parsed.scheme}://{url_parsed.netloc}',
-                    'Referer': resp.url,
-                },
+                    'Origin': f'{urlParsed.scheme}://{urlParsed.netloc}',
+                    'Referer': resp.url
+                }
             )
 
-            challenge_submit_response = self.cloudscraper.request(
+            challengeSubmitResponse = self.cloudscraper.request(
                 'POST',
                 submit_url['url'],
-                **cloudflare_kwargs,
+                **cloudflare_kwargs
             )
 
-            if challenge_submit_response.status_code == 400:
+            if challengeSubmitResponse.status_code == 400:
                 self.cloudscraper.simpleException(
                     CloudflareSolveError,
-                    'Invalid challenge answer detected, Cloudflare broken?',
+                    'Invalid challenge answer detected, Cloudflare broken?'
                 )
 
-            if not challenge_submit_response.is_redirect:
-                return challenge_submit_response
+            # ------------------------------------------------------------------------------- #
+            # Return response if Cloudflare is doing content pass through instead of 3xx
+            # else request with redirect URL also handle protocol scheme change http -> https
+            # ------------------------------------------------------------------------------- #
 
-            cloudflare_kwargs = deepcopy(kwargs)
-            cloudflare_kwargs['headers'] = update_attr(
-                cloudflare_kwargs,
-                'headers',
-                {'Referer': challenge_submit_response.url},
-            )
+            if not challengeSubmitResponse.is_redirect:
+                return challengeSubmitResponse
 
-            location = challenge_submit_response.headers['Location']
-            redirect_location = (
-                urljoin(challenge_submit_response.url, location)
-                if not urlparse(location).netloc
-                else location
-            )
+            else:
+                cloudflare_kwargs = deepcopy(kwargs)
+                cloudflare_kwargs['headers'] = updateAttr(
+                    cloudflare_kwargs,
+                    'headers',
+                    {'Referer': challengeSubmitResponse.url}
+                )
 
-            return self.cloudscraper.request(
-                resp.request.method,
-                redirect_location,
-                **cloudflare_kwargs,
-            )
+                if not urlparse(challengeSubmitResponse.headers['Location']).netloc:
+                    redirect_location = urljoin(
+                        challengeSubmitResponse.url,
+                        challengeSubmitResponse.headers['Location']
+                    )
+                else:
+                    redirect_location = challengeSubmitResponse.headers['Location']
+
+                return self.cloudscraper.request(
+                    resp.request.method,
+                    redirect_location,
+                    **cloudflare_kwargs
+                )
+
+        # ------------------------------------------------------------------------------- #
+        # We shouldn't be here...
+        # Re-request the original query and/or process again....
+        # ------------------------------------------------------------------------------- #
 
         return self.cloudscraper.request(resp.request.method, resp.url, **kwargs)
+
+    # ------------------------------------------------------------------------------- #
