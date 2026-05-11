@@ -1,3 +1,4 @@
+# proxy_manager
 # Requires Python 3.7+
 
 from __future__ import annotations
