@@ -1,18 +1,5 @@
-"""
-http_inspector.py — HTTP request/response inspector
-Pure Python, zero external dependencies.
-
-Captures and formats raw HTTP traffic from `requests` Response objects
-into human-readable bytes — useful for debugging Cloudflare bypasses
-and general HTTP troubleshooting in Kodi addons.
-
-Usage::
-
-    from http_inspector import inspect_response, inspect_all
-
-    resp = session.get("https://example.com")
-    print(inspect_response(resp).decode("utf-8"))
-"""
+# http_inspector
+# Requires Python 3.7+
 
 __all__ = ('inspect_response', 'inspect_all')
 
