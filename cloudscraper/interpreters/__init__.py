@@ -1,4 +1,3 @@
-# interpreters/__init__.py
 # Requires Python 3.8+
 
 import abc
@@ -7,12 +6,7 @@ import re
 
 from ..exceptions import CloudflareSolveError
 
-# ------------------------------------------------------------------------------- #
-
 interpreters: dict = {}
-
-# ------------------------------------------------------------------------------- #
-
 
 class JavaScriptInterpreter(abc.ABC):
 
@@ -20,19 +14,13 @@ class JavaScriptInterpreter(abc.ABC):
     def __init__(self, name: str) -> None:
         interpreters[name] = self
 
-    # ------------------------------------------------------------------------------- #
-
     @classmethod
     def dynamicImport(cls, name: str = None) -> 'JavaScriptInterpreter':
         return interpreters['native']
 
-    # ------------------------------------------------------------------------------- #
-
     @abc.abstractmethod
     def eval(self, body: str, domain: str):
         pass
-
-    # ------------------------------------------------------------------------------- #
 
     def solveChallenge(self, body: str, domain: str) -> str:
         try:
@@ -42,11 +30,6 @@ class JavaScriptInterpreter(abc.ABC):
                 'Error trying to solve Cloudflare IUAM Javascript — '
                 'they may have changed their technique.'
             )
-
-
-# ------------------------------------------------------------------------------- #
-# IUAM challenge extraction patterns
-# ------------------------------------------------------------------------------- #
 
 _IUAM_PATTERNS = [
     re.compile(
@@ -63,7 +46,6 @@ _IUAM_PATTERNS = [
     ),
 ]
 
-
 def _browser_stubs(domain: str) -> str:
     d = domain
     return (
@@ -79,16 +61,7 @@ def _browser_stubs(domain: str) -> str:
         "var a = { value: 0 };"
     )
 
-
-# ------------------------------------------------------------------------------- #
-# Native pure-Python interpreter
-# ------------------------------------------------------------------------------- #
-
 class _NativeInterpreter(JavaScriptInterpreter):
-    """
-    Built-in pure-Python JavaScript interpreter backed by js_engine.
-    Registered as 'native' — the only interpreter this project uses.
-    """
 
     def __init__(self) -> None:
         from .js_engine import Interpreter, to_string as _ts
@@ -96,20 +69,14 @@ class _NativeInterpreter(JavaScriptInterpreter):
         self._to_string = _ts
         interpreters['native'] = self
 
-    # ------------------------------------------------------------------------------- #
-
     def eval(self, body: str, domain: str):
-        """Execute JS source in a browser-stub context. Returns raw Python value."""
         ctx = self._Interpreter()
         ctx.define('atob', lambda s: base64.b64decode(self._to_string(s)).decode('utf-8'))
         if domain:
             ctx.execute(_browser_stubs(domain))
         return ctx.eval(body)
 
-    # ------------------------------------------------------------------------------- #
-
     def solveChallenge(self, body: str, domain: str) -> str:
-        """Extract and solve the IUAM JS block. Returns a formatted float string."""
         js_block = None
         for pat in _IUAM_PATTERNS:
             m = pat.search(body)
@@ -147,10 +114,5 @@ class _NativeInterpreter(JavaScriptInterpreter):
         raise CloudflareSolveError(
             "Could not extract 'a.value' from the IUAM challenge context."
         )
-
-
-# ------------------------------------------------------------------------------- #
-# Auto-register at import time
-# ------------------------------------------------------------------------------- #
 
 _NativeInterpreter()

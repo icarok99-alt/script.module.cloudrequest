@@ -1,18 +1,8 @@
-"""
-js_engine.py — Pure Python JavaScript Interpreter
-Handles the subset of JS used in Cloudflare IUAM challenges.
-Zero external dependencies.
-"""
 from __future__ import annotations
 import re
 import math
 import json
 from typing import Any, Dict, List, Optional
-
-
-# ─────────────────────────────────────────────
-# JS primitive singletons
-# ─────────────────────────────────────────────
 
 class _JSUndefined:
     _inst = None
@@ -24,7 +14,6 @@ class _JSUndefined:
     def __str__(self):   return 'undefined'
     def __bool__(self):  return False
 
-
 class _JSNull:
     _inst = None
     def __new__(cls):
@@ -35,14 +24,8 @@ class _JSNull:
     def __str__(self):   return 'null'
     def __bool__(self):  return False
 
-
 undefined = _JSUndefined()
 null      = _JSNull()
-
-
-# ─────────────────────────────────────────────
-# Type coercion helpers (ES spec abstractions)
-# ─────────────────────────────────────────────
 
 def to_number(v: Any) -> float:
     if isinstance(v, bool):             return 1.0 if v else 0.0
@@ -63,7 +46,6 @@ def to_number(v: Any) -> float:
         return float('nan')
     return float('nan')
 
-
 def to_string(v: Any) -> str:
     if isinstance(v, bool):         return 'true' if v else 'false'
     if isinstance(v, _JSNull):      return 'null'
@@ -81,7 +63,6 @@ def to_string(v: Any) -> str:
     if isinstance(v, JSObject): return '[object Object]'
     return str(v)
 
-
 def to_boolean(v: Any) -> bool:
     if isinstance(v, bool):         return v
     if isinstance(v, _JSNull):      return False
@@ -91,19 +72,16 @@ def to_boolean(v: Any) -> bool:
     if isinstance(v, str):          return len(v) > 0
     return True   # objects / arrays
 
-
 def to_int32(v: Any) -> int:
     n = to_number(v)
     if n != n or n == 0 or abs(n) == float('inf'): return 0
     n = int(n) & 0xFFFFFFFF
     return n - 0x100000000 if n >= 0x80000000 else n
 
-
 def to_uint32(v: Any) -> int:
     n = to_number(v)
     if n != n or n == 0 or abs(n) == float('inf'): return 0
     return int(n) & 0xFFFFFFFF
-
 
 def js_typeof(v: Any) -> str:
     if isinstance(v, _JSUndefined): return 'undefined'
@@ -114,18 +92,14 @@ def js_typeof(v: Any) -> str:
     if callable(v):                 return 'function'
     return 'object'
 
-
 def js_add(a: Any, b: Any) -> Any:
-    # toPrimitive: arrays / objects → string
     ap = to_string(a) if isinstance(a, (JSArray, JSObject)) else a
     bp = to_string(b) if isinstance(b, (JSArray, JSObject)) else b
     if isinstance(ap, str) or isinstance(bp, str):
         return to_string(ap) + to_string(bp)
     return to_number(ap) + to_number(bp)
 
-
 def js_eq(a: Any, b: Any) -> bool:
-    """Abstract equality (==)"""
     ta, tb = type(a), type(b)
     if ta == tb or (isinstance(a, (int, float)) and isinstance(b, (int, float))
                     and not isinstance(a, bool) and not isinstance(b, bool)):
@@ -140,11 +114,6 @@ def js_eq(a: Any, b: Any) -> bool:
     if isinstance(a, bool): return js_eq(to_number(a), b)
     if isinstance(b, bool): return js_eq(a, to_number(b))
     return False
-
-
-# ─────────────────────────────────────────────
-# JS Array / Object wrappers
-# ─────────────────────────────────────────────
 
 class JSArray(list):
     def get(self, key: Any) -> Any:
@@ -197,7 +166,6 @@ class JSArray(list):
     def __str__(self):  return to_string(self)
     def __repr__(self): return f'[{", ".join(repr(x) for x in self)}]'
 
-
 class JSObject(dict):
     def get(self, key: Any, *_) -> Any:          # type: ignore[override]
         return self.get_prop(to_string(key))
@@ -211,7 +179,6 @@ class JSObject(dict):
     def __str__(self):  return '[object Object]'
     def __repr__(self): return '{' + ', '.join(f'{k}: {repr(v)}' for k, v in self.items()) + '}'
 
-
 def _reduce(arr, fn, init):
     acc = init
     for i, x in enumerate(arr):
@@ -220,7 +187,6 @@ def _reduce(arr, fn, init):
         else:
             acc = fn(acc, x, i, arr)
     return acc
-
 
 def _flatten(arr, depth):
     out = []
@@ -231,7 +197,6 @@ def _flatten(arr, depth):
             out.append(x)
     return out
 
-
 def _splice(arr, start, delete_count=None, *items):
     s = int(to_number(start))
     if s < 0: s = max(len(arr) + s, 0)
@@ -239,7 +204,6 @@ def _splice(arr, start, delete_count=None, *items):
     removed = JSArray(arr[s:s + dc])
     arr[s:s + dc] = list(items)
     return removed
-
 
 def _parse_int(s, base=10):
     s = to_string(s).strip()
@@ -256,11 +220,6 @@ def _parse_int(s, base=10):
     if not valid: return float('nan')
     return -int(valid, base) if neg else int(valid, base)
 
-
-# ─────────────────────────────────────────────
-# Tokenizer
-# ─────────────────────────────────────────────
-
 _TOK = re.compile(
     r'(?P<COMMENT>//[^\n]*|/\*[\s\S]*?\*/)'
     r'|(?P<WS>\s+)'
@@ -275,7 +234,6 @@ _TOK = re.compile(
 
 _ESC = {'n': '\n', 't': '\t', 'r': '\r', '\\': '\\', "'": "'", '"': '"', '0': '\0'}
 
-
 def _unescape(s: str) -> str:
     out, i = [], 0
     while i < len(s):
@@ -288,13 +246,11 @@ def _unescape(s: str) -> str:
             out.append(s[i]); i += 1
     return ''.join(out)
 
-
 class Token:
     __slots__ = ('kind', 'val')
     def __init__(self, kind: str, val: Any):
         self.kind, self.val = kind, val
     def __repr__(self): return f'<{self.kind} {self.val!r}>'
-
 
 class Lexer:
     def __init__(self, src: str):
@@ -343,11 +299,6 @@ class Lexer:
     def eof(self) -> bool:
         return self.peek().kind == 'EOF'
 
-
-# ─────────────────────────────────────────────
-# Parser → AST (plain dicts)
-# ─────────────────────────────────────────────
-
 class Parser:
     def __init__(self, src: str):
         self.l = Lexer(src)
@@ -358,8 +309,6 @@ class Parser:
             s = self._stmt()
             if s: body.append(s)
         return {'T': 'Prog', 'body': body}
-
-    # ── statements ──────────────────────────
 
     def _stmt(self):
         t = self.l.peek()
@@ -511,8 +460,6 @@ class Parser:
             cases.append({'test': tst, 'cons': cons})
         self.l.eat('}')
         return {'T': 'Switch', 'disc': disc, 'cases': cases}
-
-    # ── expressions ─────────────────────────
 
     def _expr(self):
         left = self._asgn()
@@ -669,7 +616,6 @@ class Parser:
 
         if t.val == '(':
             self.l.next()
-            # Detect arrow function
             saved = self.l.i
             try:
                 ps = []
@@ -692,22 +638,12 @@ class Parser:
         self.l.next()
         return {'T': 'Lit', 'v': undefined}
 
-
-# ─────────────────────────────────────────────
-# Runtime signals
-# ─────────────────────────────────────────────
-
 class _Break(Exception):     pass
 class _Continue(Exception):  pass
 class _Return(Exception):
     def __init__(self, v): self.v = v
 class _Throw(Exception):
     def __init__(self, v): self.v = v
-
-
-# ─────────────────────────────────────────────
-# Scope / Environment
-# ─────────────────────────────────────────────
 
 class Env:
     def __init__(self, parent: Optional['Env'] = None):
@@ -731,11 +667,6 @@ class Env:
     def child(self) -> 'Env':
         return Env(self)
 
-
-# ─────────────────────────────────────────────
-# JS Function wrapper
-# ─────────────────────────────────────────────
-
 class JSFunction:
     def __init__(self, params, body, env: Env, name=None):
         self.params, self.body, self.env, self.name = params, body, env, name
@@ -752,18 +683,11 @@ class JSFunction:
             return r.v
         return undefined
 
-
-# ─────────────────────────────────────────────
-# Interpreter
-# ─────────────────────────────────────────────
-
 class Interpreter:
     def __init__(self, env: Optional[Env] = None):
         self.env = env or Env()
         if env is None:
             self._setup_builtins()
-
-    # ── public API ──────────────────────────
 
     def execute(self, source: str) -> Any:
         ast = Parser(source).parse()
@@ -780,8 +704,6 @@ class Interpreter:
 
     def get(self, name: str) -> Any:
         return self.env.get(name)
-
-    # ── built-ins ───────────────────────────
 
     def _setup_builtins(self):
         e = self.env
@@ -874,12 +796,9 @@ class Interpreter:
         e.define('TypeError',   lambda msg='': JSObject({'message': msg, 'name': 'TypeError'}))
         e.define('RegExp',      lambda *_: JSObject({'test': lambda s: False, 'exec': lambda s: null}))
         e.define('Boolean',     lambda v=False: to_boolean(v))
-        # window / global self-reference
         e.define('window', e._v)
         e.define('global', e._v)
         e.define('self',   e._v)
-
-    # ── statement execution ──────────────────
 
     def _run(self, node) -> Any:
         if node is None: return undefined
@@ -981,7 +900,6 @@ class Interpreter:
                     except _Break: return r
             return r
 
-        # fallthrough: treat as expression
         return self._ev(node)
 
     def _run_s(self, node) -> Any:
@@ -991,8 +909,6 @@ class Interpreter:
             for s in node['body']: r = self._run(s)
             return r
         return self._run(node)
-
-    # ── expression evaluation ────────────────
 
     def _ev(self, node) -> Any:
         if node is None: return undefined
@@ -1145,7 +1061,6 @@ class Interpreter:
             for e in node['exprs']: r = self._ev(e)
             return r
 
-        # statement nodes reached from expression context
         return self._run(node)
 
     def _call(self, fn, args):
@@ -1160,7 +1075,6 @@ class Interpreter:
     @staticmethod
     def _strict_eq(a, b) -> bool:
         if type(a) != type(b):
-            # int/float same numeric type in JS
             if isinstance(a, (int, float)) and isinstance(b, (int, float)) \
                and not isinstance(a, bool) and not isinstance(b, bool):
                 return a == b
@@ -1251,17 +1165,11 @@ class Interpreter:
             elif isinstance(obj, JSArray): obj.set(prop, value)
             elif isinstance(obj, dict):   obj[prop] = value
 
-
-# ─────────────────────────────────────────────
-# Helpers for JSON ↔ JS type conversion
-# ─────────────────────────────────────────────
-
 def _py_to_js(o):
     if o is None:          return null
     if isinstance(o, dict):  return JSObject({k: _py_to_js(v) for k, v in o.items()})
     if isinstance(o, list):  return JSArray([_py_to_js(x) for x in o])
     return o
-
 
 def _js_to_py(o):
     if isinstance(o, _JSNull):      return None
