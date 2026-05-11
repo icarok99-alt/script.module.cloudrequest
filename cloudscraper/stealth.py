@@ -1,4 +1,3 @@
-# Stealth Mode
 # Requires Python 3.7+
 
 from __future__ import annotations
@@ -7,8 +6,6 @@ import logging
 import random
 import time
 from typing import Any
-
-# ------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +60,6 @@ _LANGUAGE_VARIANTS = [
     'en-AU,en;q=0.9,en-US;q=0.8',
 ]
 
-
-# ------------------------------------------------------------------------------- #
-
-
 class StealthMode:
     """Stealth techniques to reduce the chance of being detected as a scraper."""
 
@@ -89,8 +82,6 @@ class StealthMode:
 
         self._request_count: int = 0
         self._last_request_time: float = 0.0
-
-    # ------------------------------------------------------------------------------- #
 
     def apply_stealth_techniques(self, method: str, url: str, **kwargs: Any) -> dict:
         """
@@ -115,23 +106,18 @@ class StealthMode:
 
         return kwargs
 
-    # ------------------------------------------------------------------------------- #
-
     def _apply_human_like_delay(self) -> None:
         if self._request_count == 0:
             return  # No delay before the very first request
 
         delay = random.uniform(self.min_delay, self.max_delay)
 
-        # Occasional longer pause (10 % of the time) capped at 10 s
         if random.random() < 0.1:
             delay = min(delay * 1.5, 10.0)
 
         if delay >= 0.1:
             logger.debug('Applying human-like delay of %.2f seconds.', delay)
             time.sleep(delay)
-
-    # ------------------------------------------------------------------------------- #
 
     def _randomize_headers(self, kwargs: dict) -> dict:
         headers: dict = dict(kwargs.get('headers', {}))  # work on a copy to avoid mutating the caller's dict
@@ -145,8 +131,6 @@ class StealthMode:
         kwargs['headers'] = headers
         return kwargs
 
-    # ------------------------------------------------------------------------------- #
-
     def _apply_browser_quirks(self, kwargs: dict) -> dict:
         user_agent: str = kwargs.get('headers', {}).get('User-Agent', '')
         browser_type = 'firefox' if 'Firefox/' in user_agent else 'chrome'
@@ -157,7 +141,6 @@ class StealthMode:
         for header, value in quirk['headers'].items():
             headers.setdefault(header, value)
 
-        # Re-order headers to match the browser's natural order
         ordered: dict = {}
         for header in quirk['order']:
             if header in headers:
@@ -166,10 +149,6 @@ class StealthMode:
 
         kwargs['headers'] = ordered
         return kwargs
-
-    # ------------------------------------------------------------------------------- #
-    # Configuration helpers
-    # ------------------------------------------------------------------------------- #
 
     def set_delay_range(self, min_delay: float, max_delay: float) -> None:
         self.min_delay = min_delay

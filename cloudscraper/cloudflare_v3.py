@@ -9,8 +9,6 @@ import random
 from copy import deepcopy
 from urllib.parse import urlparse
 
-# ------------------------------------------------------------------------------- #
-
 from .exceptions import (
     CloudflareIUAMError,
     CloudflareSolveError,
@@ -18,24 +16,15 @@ from .exceptions import (
     CloudflareCaptchaError,
 )
 
-# ------------------------------------------------------------------------------- #
-
 from .interpreters import JavaScriptInterpreter as _JSI
 
-# ------------------------------------------------------------------------------- #
-
 logger = logging.getLogger(__name__)
-
 
 class CloudflareV3:
 
     def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
         self.delay: float = self.cloudscraper.delay or random.uniform(1.0, 5.0)
-
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a Cloudflare v3 JavaScript VM challenge
-    # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_V3_Challenge(resp) -> bool:
@@ -63,10 +52,6 @@ class CloudflareV3:
             )
         except AttributeError:
             return False
-
-    # ------------------------------------------------------------------------------- #
-    # Extract v3 challenge data from the page
-    # ------------------------------------------------------------------------------- #
 
     def extract_v3_challenge_data(self, resp) -> dict:
         def _try_json(match) -> dict:
@@ -104,10 +89,6 @@ class CloudflareV3:
             'form_action': form_action.group(1),
             'vm_script': vm_script.group(1) if vm_script else None,
         }
-
-    # ------------------------------------------------------------------------------- #
-    # Execute JavaScript VM challenge
-    # ------------------------------------------------------------------------------- #
 
     def execute_vm_challenge(self, challenge_data: dict, domain: str) -> str:
         vm_script = challenge_data.get('vm_script')
@@ -167,10 +148,6 @@ class CloudflareV3:
             logger.warning('JavaScript execution failed, using fallback response', exc_info=True)
             return self.generate_fallback_response(challenge_data)
 
-    # ------------------------------------------------------------------------------- #
-    # Generate fallback response for v3 challenges
-    # ------------------------------------------------------------------------------- #
-
     def generate_fallback_response(self, challenge_data: dict) -> str:
         """Return a plausible answer when JS VM execution is unavailable."""
         opt_data = challenge_data.get('opt_data', {})
@@ -182,10 +159,6 @@ class CloudflareV3:
             return str(hash(ctx_data['cvId']) % 1_000_000)
         return str(random.randint(100_000, 999_999))
 
-    # ------------------------------------------------------------------------------- #
-    # Generate v3 challenge payload
-    # ------------------------------------------------------------------------------- #
-
     def generate_v3_challenge_payload(
         self, challenge_data: dict, resp, challenge_answer: str
     ) -> dict:
@@ -193,7 +166,6 @@ class CloudflareV3:
         if not r_token:
             raise CloudflareChallengeError("Could not find 'r' token")
 
-        # Collect all form fields except the answer placeholder
         form_fields = {
             name: value
             for name, value in re.findall(
@@ -203,14 +175,9 @@ class CloudflareV3:
         }
 
         payload = {'r': r_token.group(1), 'jschl_answer': challenge_answer}
-        # Merge remaining fields without overwriting already-set keys
         payload.update({k: v for k, v in form_fields.items() if k not in payload})
 
         return payload
-
-    # ------------------------------------------------------------------------------- #
-    # Handle the Cloudflare v3 JavaScript VM challenge
-    # ------------------------------------------------------------------------------- #
 
     def handle_V3_Challenge(self, resp, **kwargs):
         if self.cloudscraper.debug:

@@ -1,4 +1,3 @@
-# Proxy Manager
 # Requires Python 3.7+
 
 from __future__ import annotations
@@ -9,12 +8,9 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Union
 
-# ------------------------------------------------------------------------------- #
-
 logger = logging.getLogger(__name__)
 
 RotationStrategy = Literal['sequential', 'random', 'smart']
-
 
 @dataclass
 class _ProxyStat:
@@ -26,10 +22,6 @@ class _ProxyStat:
     def success_rate(self) -> float:
         total = self.success + self.failure
         return self.success / total if total else 0.0
-
-
-# ------------------------------------------------------------------------------- #
-
 
 class ProxyManager:
     """Manage and rotate proxies for CloudScraper."""
@@ -62,8 +54,6 @@ class ProxyManager:
             proxy_rotation_strategy,
         )
 
-    # ------------------------------------------------------------------------------- #
-
     def _load_proxies(
         self, proxies: Optional[Union[List[str], Dict[str, str], str]]
     ) -> None:
@@ -80,8 +70,6 @@ class ProxyManager:
                     self._proxies.append(proxy)
                     seen.add(proxy)
 
-    # ------------------------------------------------------------------------------- #
-
     def _is_available(self, proxy: str) -> bool:
         ban_ts = self._banned.get(proxy)
         return ban_ts is None or (time.monotonic() - ban_ts) > self.ban_time
@@ -93,8 +81,6 @@ class ProxyManager:
         if proxy not in self._stats:
             self._stats[proxy] = _ProxyStat()
         return self._stats[proxy]
-
-    # ------------------------------------------------------------------------------- #
 
     def get_proxy(self) -> Optional[Dict[str, str]]:
         """Return the next proxy as a ``{'http': ..., 'https': ...}`` dict."""
@@ -121,8 +107,6 @@ class ProxyManager:
         self._stat(proxy).last_used = time.monotonic()
         return self._format_proxy(proxy)
 
-    # ------------------------------------------------------------------------------- #
-
     @staticmethod
     def _format_proxy(proxy: str) -> Dict[str, str]:
         if proxy.startswith(('http://', 'https://')):
@@ -135,8 +119,6 @@ class ProxyManager:
         if isinstance(proxy, dict):
             return proxy.get('https') or proxy.get('http')
         return proxy
-
-    # ------------------------------------------------------------------------------- #
 
     def report_success(self, proxy: Union[Dict[str, str], str]) -> None:
         """Record a successful request for *proxy*."""
@@ -152,8 +134,6 @@ class ProxyManager:
             self._stat(url).failure += 1
             self._banned[url] = time.monotonic()
 
-    # ------------------------------------------------------------------------------- #
-
     def add_proxy(self, proxy: str) -> None:
         """Add *proxy* to the pool (no-op if already present)."""
         if proxy not in self._proxies:
@@ -167,8 +147,6 @@ class ProxyManager:
             self._banned.pop(proxy, None)
             self._stats.pop(proxy, None)
             logger.debug('Removed proxy: %s', proxy)
-
-    # ------------------------------------------------------------------------------- #
 
     def get_stats(self) -> dict:
         """Return a summary of proxy pool statistics."""

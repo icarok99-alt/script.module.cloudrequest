@@ -9,8 +9,6 @@ import random
 from copy import deepcopy
 from urllib.parse import urlparse
 
-# ------------------------------------------------------------------------------- #
-
 from .exceptions import (
     CloudflareCode1020,
     CloudflareIUAMError,
@@ -20,24 +18,15 @@ from .exceptions import (
     CloudflareCaptchaProvider,
 )
 
-# ------------------------------------------------------------------------------- #
-
 from .captcha import Captcha
 
-# ------------------------------------------------------------------------------- #
-
 logger = logging.getLogger(__name__)
-
 
 class CloudflareV2:
 
     def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
         self.delay: float = self.cloudscraper.delay or random.uniform(1.0, 5.0)
-
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a Cloudflare v2 challenge
-    # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_V2_Challenge(resp) -> bool:
@@ -54,10 +43,6 @@ class CloudflareV2:
         except AttributeError:
             return False
 
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a v2 hCaptcha Cloudflare challenge
-    # ------------------------------------------------------------------------------- #
-
     @staticmethod
     def is_V2_Captcha_Challenge(resp) -> bool:
         try:
@@ -72,10 +57,6 @@ class CloudflareV2:
             )
         except AttributeError:
             return False
-
-    # ------------------------------------------------------------------------------- #
-    # Extract challenge data from the page
-    # ------------------------------------------------------------------------------- #
 
     def extract_challenge_data(self, resp) -> dict:
         challenge_data_match = re.search(
@@ -108,10 +89,6 @@ class CloudflareV2:
             'form_action': form_action.group(1),
         }
 
-    # ------------------------------------------------------------------------------- #
-    # Generate the payload for the challenge response
-    # ------------------------------------------------------------------------------- #
-
     def generate_challenge_payload(self, challenge_data: dict, resp) -> dict:
         r_token = re.search(r'name="r" value="([^"]+)"', resp.text)
         if not r_token:
@@ -133,10 +110,6 @@ class CloudflareV2:
             payload['cf_chl_page_data'] = challenge_data['chlPageData']
 
         return payload
-
-    # ------------------------------------------------------------------------------- #
-    # Handle the Cloudflare v2 challenge
-    # ------------------------------------------------------------------------------- #
 
     def handle_V2_Challenge(self, resp, **kwargs):
         challenge_info = self.extract_challenge_data(resp)
@@ -163,10 +136,6 @@ class CloudflareV2:
             raise CloudflareSolveError('Failed to solve Cloudflare v2 challenge')
 
         return challenge_response
-
-    # ------------------------------------------------------------------------------- #
-    # Handle the Cloudflare v2 captcha challenge
-    # ------------------------------------------------------------------------------- #
 
     def handle_V2_Captcha_Challenge(self, resp, **kwargs):
         if (

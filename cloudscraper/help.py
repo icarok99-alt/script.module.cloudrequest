@@ -1,4 +1,3 @@
-# Help / diagnostics utilities
 # Requires Python 3.7+
 
 import json
@@ -12,9 +11,6 @@ import urllib3
 
 from . import __version__ as cloudscraper_version
 
-# ------------------------------------------------------------------------------- #
-
-
 def get_possible_ciphers() -> Union[List[str], str]:
     try:
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
@@ -22,10 +18,6 @@ def get_possible_ciphers() -> Union[List[str], str]:
         return sorted(cipher['name'] for cipher in context.get_ciphers())
     except AttributeError:
         return 'get_ciphers() is unsupported on this platform'
-
-
-# ------------------------------------------------------------------------------- #
-
 
 def _python_version() -> dict:
     interpreter = platform.python_implementation()
@@ -38,10 +30,6 @@ def _python_version() -> dict:
             version += vi.releaselevel
 
     return {'name': interpreter, 'version': version}
-
-
-# ------------------------------------------------------------------------------- #
-
 
 def system_info() -> dict:
     try:
@@ -65,11 +53,7 @@ def system_info() -> dict:
         },
     }
 
-
-# Keep legacy snake_case alias for backwards compatibility
 systemInfo = system_info
-
-# ------------------------------------------------------------------------------- #
 
 if __name__ == '__main__':
     print(json.dumps(system_info(), indent=4))

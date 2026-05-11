@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 MAX_GC_RETRIES = 3
 
-
 class _TokenInterceptor:
 
     def __init__(self, scraper):
@@ -60,7 +59,6 @@ class _TokenInterceptor:
 
     def __exit__(self, *args):
         self._scraper.perform_request = self._original_request
-
 
 class CloudflareTurnstile:
 

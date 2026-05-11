@@ -9,8 +9,6 @@ import logging
 from copy import deepcopy
 from urllib.parse import urlparse, urljoin
 
-# ------------------------------------------------------------------------------- #
-
 from .exceptions import (
     CloudflareCode1020,
     CloudflareIUAMError,
@@ -20,32 +18,19 @@ from .exceptions import (
     CloudflareCaptchaProvider,
 )
 
-# ------------------------------------------------------------------------------- #
-
 from .captcha import Captcha
 from .interpreters import JavaScriptInterpreter
 
-# ------------------------------------------------------------------------------- #
-
 logger = logging.getLogger(__name__)
-
 
 class Cloudflare:
 
     def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
 
-    # ------------------------------------------------------------------------------- #
-    # Unescape / decode html entities
-    # ------------------------------------------------------------------------------- #
-
     @staticmethod
     def unescape(html_text: str) -> str:
         return html.unescape(html_text)
-
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a valid Cloudflare challenge
-    # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_IUAM_Challenge(resp) -> bool:
@@ -63,10 +48,6 @@ class Cloudflare:
         except AttributeError:
             return False
 
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a new Cloudflare challenge
-    # ------------------------------------------------------------------------------- #
-
     def is_New_IUAM_Challenge(self, resp) -> bool:
         try:
             return bool(
@@ -80,10 +61,6 @@ class Cloudflare:
         except AttributeError:
             return False
 
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a v2 hCaptcha Cloudflare challenge
-    # ------------------------------------------------------------------------------- #
-
     def is_New_Captcha_Challenge(self, resp) -> bool:
         try:
             return bool(
@@ -96,10 +73,6 @@ class Cloudflare:
             )
         except AttributeError:
             return False
-
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains a Cloudflare hCaptcha challenge
-    # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_Captcha_Challenge(resp) -> bool:
@@ -119,10 +92,6 @@ class Cloudflare:
         except AttributeError:
             return False
 
-    # ------------------------------------------------------------------------------- #
-    # Check if the response contains Firewall 1020 Error
-    # ------------------------------------------------------------------------------- #
-
     @staticmethod
     def is_Firewall_Blocked(resp) -> bool:
         try:
@@ -137,10 +106,6 @@ class Cloudflare:
             )
         except AttributeError:
             return False
-
-    # ------------------------------------------------------------------------------- #
-    # Wrapper for is_Captcha_Challenge, is_IUAM_Challenge, is_Firewall_Blocked
-    # ------------------------------------------------------------------------------- #
 
     def is_Challenge_Request(self, resp) -> bool:
         if self.is_Firewall_Blocked(resp):
@@ -169,10 +134,6 @@ class Cloudflare:
             return True
 
         return False
-
-    # ------------------------------------------------------------------------------- #
-    # Try to solve cloudflare javascript challenge.
-    # ------------------------------------------------------------------------------- #
 
     def IUAM_Challenge_Response(self, body: str, url: str, interpreter: str) -> dict:
         try:
@@ -232,10 +193,6 @@ class Cloudflare:
             'data': payload,
         }
 
-    # ------------------------------------------------------------------------------- #
-    # Try to solve the Captcha challenge via 3rd party.
-    # ------------------------------------------------------------------------------- #
-
     def captcha_Challenge_Response(
         self, provider: str, provider_params: dict, body: str, url: str
     ) -> dict:
@@ -278,26 +235,13 @@ class Cloudflare:
                 "Cloudflare Captcha detected, unfortunately we can't extract the parameters correctly.",
             )
 
-        # ------------------------------------------------------------------------------- #
-        # Pass proxy parameter to provider to solve captcha.
-        # ------------------------------------------------------------------------------- #
-
         if (
             self.cloudscraper.proxies
             and self.cloudscraper.proxies != self.cloudscraper.captcha.get('proxy')
         ):
-            # Bug fix: was incorrectly using `self.proxies` (undefined)
             self.cloudscraper.captcha['proxy'] = self.cloudscraper.proxies
 
-        # ------------------------------------------------------------------------------- #
-        # Pass User-Agent if provider supports it to solve captcha.
-        # ------------------------------------------------------------------------------- #
-
         self.cloudscraper.captcha['User-Agent'] = self.cloudscraper.headers['User-Agent']
-
-        # ------------------------------------------------------------------------------- #
-        # Submit job to provider to request captcha solve.
-        # ------------------------------------------------------------------------------- #
 
         captcha_response = Captcha.dynamicImport(provider.lower()).solveCaptcha(
             captcha_type,
@@ -305,10 +249,6 @@ class Cloudflare:
             payload['data-sitekey'],
             provider_params,
         )
-
-        # ------------------------------------------------------------------------------- #
-        # Parse and handle the response of solved captcha.
-        # ------------------------------------------------------------------------------- #
 
         data_payload = {
             'r': payload.get('name="r" value', ''),
@@ -330,14 +270,8 @@ class Cloudflare:
             'data': data_payload,
         }
 
-    # ------------------------------------------------------------------------------- #
-    # Attempt to handle and send the challenge response back to Cloudflare
-    # ------------------------------------------------------------------------------- #
-
     def Challenge_Response(self, resp, **kwargs):
         if self.is_Captcha_Challenge(resp):
-            # Double down on the request as some websites only check
-            # if cfuid is populated before issuing a Captcha.
             if self.cloudscraper.doubleDown:
                 resp = self.cloudscraper.decodeBrotli(
                     self.cloudscraper.perform_request(resp.request.method, resp.url, **kwargs)
@@ -395,10 +329,6 @@ class Cloudflare:
                 self.cloudscraper.interpreter,
             )
 
-        # ------------------------------------------------------------------------------- #
-        # Send the Challenge Response back to Cloudflare
-        # ------------------------------------------------------------------------------- #
-
         if submit_url:
 
             def update_attr(obj: dict, name: str, new_value: dict) -> dict:
@@ -433,8 +363,6 @@ class Cloudflare:
                     'Invalid challenge answer detected, Cloudflare broken?',
                 )
 
-            # Return response if Cloudflare is doing content pass-through instead of 3xx,
-            # else follow redirect (handling scheme changes http → https).
             if not challenge_submit_response.is_redirect:
                 return challenge_submit_response
 
@@ -458,5 +386,4 @@ class Cloudflare:
                 **cloudflare_kwargs,
             )
 
-        # Shouldn't reach here — re-request original query and process again.
         return self.cloudscraper.request(resp.request.method, resp.url, **kwargs)
