@@ -1,3 +1,6 @@
+# Cloudflare Turnstile
+# Requires Python 3.7+
+
 import re
 import time
 import logging
@@ -6,10 +9,14 @@ from copy import deepcopy
 from urllib.parse import urlparse
 
 from .exceptions import (
+    CloudflareIUAMError,
     CloudflareSolveError,
+    CloudflareChallengeError,
+    CloudflareCaptchaError,
     CloudflareCaptchaProvider,
     CloudflareTurnstileError,
 )
+
 from .captcha import Captcha
 
 logger = logging.getLogger(__name__)
