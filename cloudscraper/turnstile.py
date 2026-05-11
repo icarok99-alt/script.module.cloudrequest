@@ -1,6 +1,3 @@
-# Cloudflare Turnstile
-# Requires Python 3.7+
-
 import re
 import time
 import logging
@@ -8,30 +5,19 @@ import random
 from copy import deepcopy
 from urllib.parse import urlparse
 
-# ------------------------------------------------------------------------------- #
-
 from .exceptions import (
-    CloudflareIUAMError,
     CloudflareSolveError,
-    CloudflareChallengeError,
-    CloudflareCaptchaError,
     CloudflareCaptchaProvider,
     CloudflareTurnstileError,
 )
-
 from .captcha import Captcha
-
-# ------------------------------------------------------------------------------- #
 
 logger = logging.getLogger(__name__)
 
 MAX_GC_RETRIES = 3
 
-# ------------------------------------------------------------------------------- #
-
 
 class _TokenInterceptor:
-    """Captures gc_response tokens produced during cloudscraper's internal requests."""
 
     def __init__(self, scraper):
         self._scraper = scraper
@@ -69,22 +55,12 @@ class _TokenInterceptor:
         self._scraper.perform_request = self._original_request
 
 
-# ------------------------------------------------------------------------------- #
-
-
 class CloudflareTurnstile:
 
     def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
         self.delay: float = self.cloudscraper.delay or random.uniform(1.0, 5.0)
-        # Optional callable(resp, headers) -> str | None
-        # Set by plugins that resolve gc_response via their own endpoint (e.g. DoodStream).
-        # When set, handle_Turnstile_Challenge routes to handle_GC_Challenge instead.
         self.token_provider = None
-
-    # ------------------------------------------------------------------------------- #
-    # Detect a standard Cloudflare Turnstile challenge (captcha provider flow)
-    # ------------------------------------------------------------------------------- #
 
     @staticmethod
     def is_Turnstile_Challenge(resp) -> bool:
@@ -109,10 +85,6 @@ class CloudflareTurnstile:
         except AttributeError:
             return False
 
-    # ------------------------------------------------------------------------------- #
-    # Detect a gc_response-style Turnstile challenge (DoodStream / custom flow)
-    # ------------------------------------------------------------------------------- #
-
     @staticmethod
     def is_GC_Challenge(resp) -> bool:
         try:
@@ -126,10 +98,6 @@ class CloudflareTurnstile:
             ])
         except Exception:
             return False
-
-    # ------------------------------------------------------------------------------- #
-    # Extract sitekey and form action from a standard Turnstile challenge page
-    # ------------------------------------------------------------------------------- #
 
     def extract_turnstile_data(self, resp) -> dict:
         site_key = re.search(r'data-sitekey="([0-9A-Za-z]{40})"', resp.text)
@@ -149,12 +117,6 @@ class CloudflareTurnstile:
             'site_key': site_key.group(1),
             'form_action': form_action_url,
         }
-
-    # ------------------------------------------------------------------------------- #
-    # Called automatically by cloudscraper's request().
-    # Routes to handle_GC_Challenge when a token_provider is registered,
-    # otherwise uses the standard captcha provider flow.
-    # ------------------------------------------------------------------------------- #
 
     def handle_Turnstile_Challenge(self, resp, **kwargs):
         if self.token_provider:
@@ -184,7 +146,6 @@ class CloudflareTurnstile:
         )
 
         payload: dict = {'cf-turnstile-response': turnstile_response}
-
         payload.update({
             name: value
             for name, value in re.findall(
@@ -215,16 +176,6 @@ class CloudflareTurnstile:
 
         return challenge_response
 
-    # ------------------------------------------------------------------------------- #
-    # gc_response flow — used by plugins that obtain the token from a site endpoint.
-    #
-    # Token resolution order:
-    #   1. self.token_provider  — plugin-supplied callable (e.g. DoodStream validate POST)
-    #   2. _TokenInterceptor    — captures gc_response from perform_request internals
-    #   3. cookies              — gc_response / cf_clearance already in session
-    #   4. HTML                 — hidden field or JS variable in challenge page
-    # ------------------------------------------------------------------------------- #
-
     def handle_GC_Challenge(self, resp, **kwargs):
         base_headers = dict(kwargs.pop('headers', {}) or {})
         parsed = urlparse(resp.url)
@@ -236,14 +187,12 @@ class CloudflareTurnstile:
 
             time.sleep(self.delay)
 
-            # -- 1. plugin token provider --
             token = None
             try:
                 token = self.token_provider(resp, base_headers)
             except Exception:
                 pass
 
-            # -- 2. intercept from perform_request internals --
             if not token:
                 with _TokenInterceptor(self.cloudscraper) as interceptor:
                     try:
@@ -252,11 +201,9 @@ class CloudflareTurnstile:
                         pass
                     token = interceptor.captured_token
 
-            # -- 3. fallback: cookies --
             if not token:
                 token = self._gc_token_from_cookies()
 
-            # -- 4. fallback: HTML --
             if not token:
                 token = self._gc_token_from_html(resp.text)
 
@@ -286,8 +233,6 @@ class CloudflareTurnstile:
             time.sleep(self.delay * attempt)
 
         return resp
-
-    # ------------------------------------------------------------------------------- #
 
     def _gc_token_from_cookies(self) -> 'str | None':
         try:
