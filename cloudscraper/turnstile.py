@@ -1,135 +1,175 @@
-# Cloudflare Turnstile
-# Python 3
+# turnstile.py  –  Cloudflare Turnstile widget challenge handler
+# Requires Python 3.8+
 
 import re
 import time
-import json
 import logging
 import random
 from copy import deepcopy
-from collections import OrderedDict
 from urllib.parse import urlparse, urljoin
 
 from .exceptions import (
-    CloudflareIUAMError,
     CloudflareSolveError,
     CloudflareChallengeError,
-    CloudflareCaptchaError,
     CloudflareCaptchaProvider,
-    CloudflareTurnstileError
+    CloudflareTurnstileError,
+)
+from .captcha import Captcha
+from .challenge_detector import ChallengeType, detect_challenge_type
+
+logger = logging.getLogger(__name__)
+
+_SITEKEY_RE = re.compile(
+    r'data-sitekey=["\']([0-9A-Za-z_\-]{20,})["\']'
 )
 
-from .captcha import Captcha
+class CloudflareTurnstile:
 
-
-class CloudflareTurnstile():
-
-    def __init__(self, cloudscraper):
+    def __init__(self, cloudscraper) -> None:
         self.cloudscraper = cloudscraper
-        self.delay = self.cloudscraper.delay or random.uniform(1.0, 5.0)
+        self.delay: float = self.cloudscraper.delay or random.uniform(1.0, 4.0)
 
     @staticmethod
-    def is_Turnstile_Challenge(resp):
+    def is_Turnstile_Challenge(resp) -> bool:
         try:
-            return (
-                resp.headers.get('Server', '').startswith('cloudflare')
-                and resp.status_code in [403, 429, 503]
-                and (
-                    re.search(r'class="cf-turnstile"', resp.text, re.M | re.S)
-                    or re.search(
-                        r'src="https://challenges.cloudflare.com/turnstile/v0/api.js',
-                        resp.text,
-                        re.M | re.S
-                    )
-                    or re.search(r'data-sitekey="[0-9A-Za-z]{40}"', resp.text, re.M | re.S)
-                )
-            )
+            return detect_challenge_type(resp) == ChallengeType.TURNSTILE
         except AttributeError:
-            pass
+            return False
 
-        return False
+    def extract_turnstile_data(self, resp) -> dict:
+        
+        text = resp.text
 
-    def extract_turnstile_data(self, resp):
-        try:
-            site_key = re.search(r'data-sitekey="([0-9A-Za-z]{40})"', resp.text)
+        site_key_match = re.search(
+            r'<(?:div|span)[^>]+class=["\'][^"\']*cf-turnstile[^"\']*["\'][^>]*'
+            r'data-sitekey=["\']([0-9A-Za-z_\-]{20,})["\']',
+            text,
+            re.DOTALL,
+        ) or re.search(
+            r'<(?:div|span)[^>]+data-sitekey=["\']([0-9A-Za-z_\-]{20,})["\'][^>]*'
+            r'class=["\'][^"\']*cf-turnstile',
+            text,
+            re.DOTALL,
+        ) or _SITEKEY_RE.search(text)
 
-            if not site_key:
-                raise CloudflareTurnstileError("Could not find Turnstile site key")
+        if not site_key_match:
+            raise CloudflareTurnstileError(
+                "Could not find a Turnstile site key in the challenge page."
+            )
 
-            form_action = re.search(r'<form .*?action="([^"]+)"', resp.text, re.DOTALL)
+        site_key = site_key_match.group(1)
 
-            if not form_action:
-                url_parsed = urlparse(resp.url)
-                form_action_url = f"{url_parsed.scheme}://{url_parsed.netloc}{url_parsed.path}"
-            else:
-                form_action_url = form_action.group(1)
+        form_action_match = re.search(
+            r'<form[^>]*id=["\']challenge-form["\'][^>]*action="([^"]+)"',
+            text,
+            re.DOTALL,
+        ) or re.search(
+            r'<form[^>]*action="([^"]+)"[^>]*id=["\']challenge-form["\']',
+            text,
+            re.DOTALL,
+        )
 
-            return {
-                'site_key': site_key.group(1),
-                'form_action': form_action_url
-            }
+        if form_action_match:
+            form_action = form_action_match.group(1)
+            if not form_action.startswith("http"):
+                parsed = urlparse(resp.url)
+                form_action = f"{parsed.scheme}://{parsed.netloc}{form_action}"
+        else:
+            parsed = urlparse(resp.url)
+            form_action = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            logger.debug(
+                "Turnstile: no challenge-form found; defaulting form_action to %s",
+                form_action,
+            )
 
-        except Exception as e:
-            logging.error(f"Error extracting Cloudflare Turnstile data: {str(e)}")
-            raise CloudflareTurnstileError(f"Error extracting Cloudflare Turnstile data: {str(e)}")
+        form_body_match = re.search(
+            r'<form[^>]*id=["\']challenge-form["\'][^>]*>(.*?)</form>',
+            text,
+            re.DOTALL,
+        )
+        scope = form_body_match.group(1) if form_body_match else text
+
+        hidden: dict = {}
+        for attrs in re.findall(r"<input([^>]+)>", scope, re.IGNORECASE):
+            name_m = re.search(r'name=["\']([^"\']+)["\']', attrs)
+            val_m = re.search(r'value=["\']([^"\']*)["\']', attrs)
+            if name_m and name_m.group(1) != "cf-turnstile-response":
+                hidden[name_m.group(1)] = val_m.group(1) if val_m else ""
+
+        return {
+            "site_key": site_key,
+            "form_action": form_action,
+            "hidden": hidden,
+        }
 
     def handle_Turnstile_Challenge(self, resp, **kwargs):
+        
+        if (
+            not self.cloudscraper.captcha
+            or not isinstance(self.cloudscraper.captcha, dict)
+            or not self.cloudscraper.captcha.get("provider")
+        ):
+            self.cloudscraper.simpleException(
+                CloudflareCaptchaProvider,
+                "Cloudflare Turnstile detected but no captcha provider was configured. "
+                "Pass captcha={'provider': '<name>', ...} to create_scraper().",
+            )
+
         try:
-            if (
-                not self.cloudscraper.captcha
-                or not isinstance(self.cloudscraper.captcha, dict)
-                or not self.cloudscraper.captcha.get('provider')
-            ):
-                self.cloudscraper.simpleException(
-                    CloudflareCaptchaProvider,
-                    "Cloudflare Turnstile detected, but no captcha provider configured"
-                )
-
             turnstile_info = self.extract_turnstile_data(resp)
+        except CloudflareTurnstileError:
+            raise
+        except Exception as exc:
+            raise CloudflareTurnstileError(
+                f"Error extracting Turnstile data: {exc}"
+            ) from exc
 
-            time.sleep(self.delay)
+        if self.cloudscraper.debug:
+            print(
+                f"Turnstile site key: {turnstile_info['site_key']} | "
+                f"form action: {turnstile_info['form_action']}"
+            )
 
-            turnstile_response = Captcha.dynamicImport(
-                self.cloudscraper.captcha.get('provider').lower()
+        time.sleep(self.delay)
+
+        try:
+            token = Captcha.dynamicImport(
+                self.cloudscraper.captcha.get("provider").lower()
             ).solveCaptcha(
-                'turnstile',
+                "turnstile",
                 resp.url,
-                turnstile_info['site_key'],
-                self.cloudscraper.captcha
+                turnstile_info["site_key"],
+                self.cloudscraper.captcha,
+            )
+        except Exception as exc:
+            raise CloudflareTurnstileError(
+                f"Captcha provider failed to solve Turnstile: {exc}"
+            ) from exc
+
+        payload: dict = {"cf-turnstile-response": token}
+        payload.update(turnstile_info["hidden"])
+
+        url_parsed = urlparse(resp.url)
+        challenge_url = turnstile_info["form_action"]
+
+        cloudflare_kwargs = deepcopy(kwargs)
+        cloudflare_kwargs["allow_redirects"] = False
+        cloudflare_kwargs.setdefault("headers", {}).update(
+            {
+                "Origin": f"{url_parsed.scheme}://{url_parsed.netloc}",
+                "Referer": resp.url,
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+        )
+
+        challenge_response = self.cloudscraper.request(
+            "POST", challenge_url, data=payload, **cloudflare_kwargs
+        )
+
+        if challenge_response.status_code == 403:
+            raise CloudflareSolveError(
+                "Turnstile token was rejected by Cloudflare (HTTP 403). "
+                "The provider may have returned an invalid token."
             )
 
-            payload = {'cf-turnstile-response': turnstile_response}
-
-            for field in re.findall(r'<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"', resp.text):
-                if field[0] != 'cf-turnstile-response':
-                    payload[field[0]] = field[1]
-
-            url_parsed = urlparse(resp.url)
-            challenge_url = turnstile_info['form_action']
-            if not challenge_url.startswith('http'):
-                challenge_url = f"{url_parsed.scheme}://{url_parsed.netloc}{challenge_url}"
-
-            cloudflare_kwargs = deepcopy(kwargs)
-            cloudflare_kwargs['allow_redirects'] = False
-            cloudflare_kwargs['headers'] = cloudflare_kwargs.get('headers', {})
-            cloudflare_kwargs['headers'].update({
-                'Origin': f'{url_parsed.scheme}://{url_parsed.netloc}',
-                'Referer': resp.url,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            })
-
-            challenge_response = self.cloudscraper.request(
-                'POST',
-                challenge_url,
-                data=payload,
-                **cloudflare_kwargs
-            )
-
-            if challenge_response.status_code == 403:
-                raise CloudflareSolveError("Failed to solve Cloudflare Turnstile challenge")
-
-            return challenge_response
-
-        except Exception as e:
-            logging.error(f"Error handling Cloudflare Turnstile challenge: {str(e)}")
-            raise CloudflareTurnstileError(f"Error handling Cloudflare Turnstile challenge: {str(e)}")
+        return challenge_response
