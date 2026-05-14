@@ -1,5 +1,5 @@
-# exceptions
-# Requires Python 3.7+
+# cloudscraper  –  main package  (v3.1.0)
+# Requires Python 3.8+
 
 """
 cloudscraper.exceptions
