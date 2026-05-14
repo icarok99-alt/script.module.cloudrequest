@@ -1,5 +1,5 @@
-# proxy_manager
-# Requires Python 3.7+
+# cloudscraper  –  main package  (v3.1.0)
+# Requires Python 3.8+
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Dict, List, Literal, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-RotationStrategy = Literal['sequential', 'random', 'smart']
+RotationStrategy = Literal["sequential", "random", "smart"]
 
 @dataclass
 class _ProxyStat:
@@ -25,26 +25,19 @@ class _ProxyStat:
         return self.success / total if total else 0.0
 
 class ProxyManager:
-    """Manage and rotate proxies for CloudScraper."""
 
     def __init__(
         self,
         proxies: Optional[Union[List[str], Dict[str, str], str]] = None,
-        proxy_rotation_strategy: RotationStrategy = 'sequential',
+        proxy_rotation_strategy: RotationStrategy = "sequential",
         ban_time: float = 300.0,
     ) -> None:
-        """
-        :param proxies: List of proxy URLs, a dict mapping URL schemes to proxy
-                        URLs, or a single proxy URL string.
-        :param proxy_rotation_strategy: One of 'sequential', 'random', or 'smart'.
-        :param ban_time: Seconds to temporarily ban a proxy after a failure.
-        """
         self.rotation_strategy: RotationStrategy = proxy_rotation_strategy
         self.ban_time: float = ban_time
 
         self._proxies: list[str] = []
         self._current_index: int = 0
-        self._banned: dict[str, float] = {}   # proxy_url → ban timestamp
+        self._banned: dict[str, float] = {}
         self._stats: dict[str, _ProxyStat] = {}
 
         self._load_proxies(proxies)
@@ -84,23 +77,22 @@ class ProxyManager:
         return self._stats[proxy]
 
     def get_proxy(self) -> Optional[Dict[str, str]]:
-        """Return the next proxy as a ``{'http': ..., 'https': ...}`` dict."""
         if not self._proxies:
             return None
 
         available = self._available_proxies()
 
         if not available:
-            logger.warning('All proxies are banned. Unbanning the least recently banned one.')
+            logger.warning("All proxies are banned. Unbanning the least recently banned one.")
             proxy = min(self._banned, key=self._banned.__getitem__)
             del self._banned[proxy]
             available = [proxy]
 
-        if self.rotation_strategy == 'random':
+        if self.rotation_strategy == "random":
             proxy = random.choice(available)
-        elif self.rotation_strategy == 'smart':
+        elif self.rotation_strategy == "smart":
             proxy = max(available, key=lambda p: self._stat(p).success_rate)
-        else:  # sequential
+        else:
             self._current_index %= len(available)
             proxy = available[self._current_index]
             self._current_index += 1
@@ -110,57 +102,52 @@ class ProxyManager:
 
     @staticmethod
     def _format_proxy(proxy: str) -> Dict[str, str]:
-        if proxy.startswith(('http://', 'https://')):
-            return {'http': proxy, 'https': proxy}
+        if proxy.startswith(("http://", "https://")):
+            return {"http": proxy, "https": proxy}
         normalised = f'http://{proxy}'
-        return {'http': normalised, 'https': normalised}
+        return {"http": normalised, "https": normalised}
 
     @staticmethod
     def _extract_url(proxy: Union[Dict[str, str], str]) -> Optional[str]:
         if isinstance(proxy, dict):
-            return proxy.get('https') or proxy.get('http')
+            return proxy.get("https") or proxy.get("http")
         return proxy
 
     def report_success(self, proxy: Union[Dict[str, str], str]) -> None:
-        """Record a successful request for *proxy*."""
         url = self._extract_url(proxy)
         if url:
             self._stat(url).success += 1
             self._banned.pop(url, None)
 
     def report_failure(self, proxy: Union[Dict[str, str], str]) -> None:
-        """Record a failed request for *proxy* and temporarily ban it."""
         url = self._extract_url(proxy)
         if url:
             self._stat(url).failure += 1
             self._banned[url] = time.monotonic()
 
     def add_proxy(self, proxy: str) -> None:
-        """Add *proxy* to the pool (no-op if already present)."""
         if proxy not in self._proxies:
             self._proxies.append(proxy)
-            logger.debug('Added proxy: %s', proxy)
+            logger.debug("Added proxy: %s", proxy)
 
     def remove_proxy(self, proxy: str) -> None:
-        """Remove *proxy* from the pool."""
         if proxy in self._proxies:
             self._proxies.remove(proxy)
             self._banned.pop(proxy, None)
             self._stats.pop(proxy, None)
-            logger.debug('Removed proxy: %s', proxy)
+            logger.debug("Removed proxy: %s", proxy)
 
     def get_stats(self) -> dict:
-        """Return a summary of proxy pool statistics."""
         return {
-            'total_proxies': len(self._proxies),
-            'available_proxies': len(self._available_proxies()),
-            'banned_proxies': len(self._banned),
-            'proxy_stats': {
+            "total_proxies": len(self._proxies),
+            "available_proxies": len(self._available_proxies()),
+            "banned_proxies": len(self._banned),
+            "proxy_stats": {
                 url: {
-                    'success': s.success,
-                    'failure': s.failure,
-                    'success_rate': round(s.success_rate, 4),
-                    'last_used': s.last_used,
+                    "success": s.success,
+                    "failure": s.failure,
+                    "success_rate": round(s.success_rate, 4),
+                    "last_used": s.last_used,
                 }
                 for url, s in self._stats.items()
             },
