@@ -1,4 +1,4 @@
-# challenge_detector.py  –  Centralized Cloudflare challenge detection
+# cloudscraper  –  main package  (v3.1.0)
 # Requires Python 3.8+
 
 from __future__ import annotations
