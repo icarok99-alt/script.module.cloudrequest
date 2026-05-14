@@ -1,4 +1,4 @@
-# cloudflare_v3.py  –  Cloudflare V3 JavaScript VM challenge handler
+# cloudscraper  –  main package  (v3.1.0)
 # Requires Python 3.8+
 
 import re
