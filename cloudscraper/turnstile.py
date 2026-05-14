@@ -1,4 +1,4 @@
-# turnstile.py  –  Cloudflare Turnstile widget challenge handler
+# cloudscraper  –  main package  (v3.1.0)
 # Requires Python 3.8+
 
 import re
