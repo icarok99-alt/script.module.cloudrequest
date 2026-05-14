@@ -1,4 +1,4 @@
-# cloudflare.py  –  Cloudflare V1 (legacy IUAM / captcha) handler
+# cloudscraper  –  main package  (v3.1.0)
 # Requires Python 3.8+
 
 import html
