@@ -1,5 +1,5 @@
-# stealth
-# Requires Python 3.7+
+# cloudscraper  –  main package  (v3.1.0)
+# Requires Python 3.8+
 
 from __future__ import annotations
 
@@ -11,58 +11,57 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _BROWSER_QUIRKS: dict[str, dict] = {
-    'chrome': {
-        'order': [
-            'Host', 'Connection', 'sec-ch-ua', 'sec-ch-ua-mobile',
-            'sec-ch-ua-platform', 'User-Agent', 'Accept', 'Sec-Fetch-Site',
-            'Sec-Fetch-Mode', 'Sec-Fetch-User', 'Sec-Fetch-Dest',
-            'Referer', 'Accept-Encoding', 'Accept-Language', 'Cookie',
+    "chrome": {
+        "order": [
+            "Host", "Connection", "sec-ch-ua", "sec-ch-ua-mobile",
+            "sec-ch-ua-platform", "User-Agent", "Accept", "Sec-Fetch-Site",
+            "Sec-Fetch-Mode", "Sec-Fetch-User", "Sec-Fetch-Dest",
+            "Referer", "Accept-Encoding", "Accept-Language", "Cookie",
         ],
-        'headers': {
-            'sec-ch-ua': '"Google Chrome";v="117", "Not;A=Brand";v="8", "Chromium";v="117"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-User': '?1',
-            'Sec-Fetch-Dest': 'document',
-            'Accept-Language': 'en-US,en;q=0.9',
+        "headers": {
+            "sec-ch-ua": '"Google Chrome";v="117", "Not;A=Brand";v="8", "Chromium";v="117"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-User": "?1",
+            "Sec-Fetch-Dest": "document",
+            "Accept-Language": "en-US,en;q=0.9",
         },
     },
-    'firefox': {
-        'order': [
-            'Host', 'User-Agent', 'Accept', 'Accept-Language',
-            'Accept-Encoding', 'Connection', 'Upgrade-Insecure-Requests',
-            'Referer', 'Cookie',
+    "firefox": {
+        "order": [
+            "Host", "User-Agent", "Accept", "Accept-Language",
+            "Accept-Encoding", "Connection", "Upgrade-Insecure-Requests",
+            "Referer", "Cookie",
         ],
-        'headers': {
-            'Accept': (
-                'text/html,application/xhtml+xml,application/xml;'
-                'q=0.9,image/avif,image/webp,*/*;q=0.8'
+        "headers": {
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;"
+                "q=0.9,image/avif,image/webp,*/*;q=0.8"
             ),
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Upgrade-Insecure-Requests': '1',
-            'Connection': 'keep-alive',
+            "Accept-Language": "en-US,en;q=0.5",
+            "Upgrade-Insecure-Requests": "1",
+            "Connection": "keep-alive",
         },
     },
 }
 
 _ACCEPT_VARIANTS = [
-    'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 ]
 
 _LANGUAGE_VARIANTS = [
-    'en-US,en;q=0.9',
-    'en-US,en;q=0.8',
-    'en-GB,en;q=0.9,en-US;q=0.8',
-    'en-CA,en;q=0.9,en-US;q=0.8',
-    'en-AU,en;q=0.9,en-US;q=0.8',
+    "en-US,en;q=0.9",
+    "en-US,en;q=0.8",
+    "en-GB,en;q=0.9,en-US;q=0.8",
+    "en-CA,en;q=0.9,en-US;q=0.8",
+    "en-AU,en;q=0.9,en-US;q=0.8",
 ]
 
 class StealthMode:
-    """Stealth techniques to reduce the chance of being detected as a scraper."""
 
     def __init__(
         self,
@@ -85,14 +84,6 @@ class StealthMode:
         self._last_request_time: float = 0.0
 
     def apply_stealth_techniques(self, method: str, url: str, **kwargs: Any) -> dict:
-        """
-        Apply stealth techniques and return the (possibly modified) kwargs.
-
-        :param method: HTTP method string (unused here, kept for API compatibility).
-        :param url: Target URL (unused here, kept for API compatibility).
-        :param kwargs: Request keyword arguments.
-        :return: Modified kwargs dict.
-        """
         if self.human_like_delays:
             self._apply_human_like_delay()
 
@@ -109,7 +100,7 @@ class StealthMode:
 
     def _apply_human_like_delay(self) -> None:
         if self._request_count == 0:
-            return  # No delay before the very first request
+            return
 
         delay = random.uniform(self.min_delay, self.max_delay)
 
@@ -117,38 +108,38 @@ class StealthMode:
             delay = min(delay * 1.5, 10.0)
 
         if delay >= 0.1:
-            logger.debug('Applying human-like delay of %.2f seconds.', delay)
+            logger.debug("Applying human-like delay of %.2f seconds.", delay)
             time.sleep(delay)
 
     def _randomize_headers(self, kwargs: dict) -> dict:
-        headers: dict = dict(kwargs.get('headers', {}))  # work on a copy to avoid mutating the caller's dict
+        headers: dict = dict(kwargs.get("headers", {}))
 
-        headers.setdefault('Accept', random.choice(_ACCEPT_VARIANTS))
-        headers.setdefault('Accept-Language', random.choice(_LANGUAGE_VARIANTS))
+        headers.setdefault("Accept", random.choice(_ACCEPT_VARIANTS))
+        headers.setdefault("Accept-Language", random.choice(_LANGUAGE_VARIANTS))
 
         if random.random() < 0.5:
-            headers.setdefault('DNT', '1')
+            headers.setdefault("DNT", "1")
 
-        kwargs['headers'] = headers
+        kwargs["headers"] = headers
         return kwargs
 
     def _apply_browser_quirks(self, kwargs: dict) -> dict:
-        user_agent: str = kwargs.get('headers', {}).get('User-Agent', '')
-        browser_type = 'firefox' if 'Firefox/' in user_agent else 'chrome'
+        user_agent: str = kwargs.get("headers", {}).get("User-Agent", "")
+        browser_type = "firefox" if "Firefox/" in user_agent else "chrome"
 
         quirk = _BROWSER_QUIRKS[browser_type]
-        headers: dict = dict(kwargs.get('headers', {}))  # work on a copy to avoid mutating the caller's dict
+        headers: dict = dict(kwargs.get("headers", {}))
 
-        for header, value in quirk['headers'].items():
+        for header, value in quirk["headers"].items():
             headers.setdefault(header, value)
 
         ordered: dict = {}
-        for header in quirk['order']:
+        for header in quirk["order"]:
             if header in headers:
                 ordered[header] = headers.pop(header)
-        ordered.update(headers)  # Append any remaining headers
+        ordered.update(headers)
 
-        kwargs['headers'] = ordered
+        kwargs["headers"] = ordered
         return kwargs
 
     def set_delay_range(self, min_delay: float, max_delay: float) -> None:

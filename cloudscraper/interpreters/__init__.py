@@ -1,4 +1,4 @@
-# interpreters
+# cloudscraper  –  main package  (v3.1.0)
 # Requires Python 3.8+
 
 import abc
@@ -16,8 +16,8 @@ class JavaScriptInterpreter(abc.ABC):
         interpreters[name] = self
 
     @classmethod
-    def dynamicImport(cls, name: str = None) -> 'JavaScriptInterpreter':
-        return interpreters['native']
+    def dynamicImport(cls, name: str = None) -> "JavaScriptInterpreter":
+        return interpreters["native"]
 
     @abc.abstractmethod
     def eval(self, body: str, domain: str):
@@ -25,24 +25,24 @@ class JavaScriptInterpreter(abc.ABC):
 
     def solveChallenge(self, body: str, domain: str) -> str:
         try:
-            return '{:.10f}'.format(float(self.eval(body, domain)))
+            return "{:.10f}".format(float(self.eval(body, domain)))
         except Exception:
             raise CloudflareSolveError(
-                'Error trying to solve Cloudflare IUAM Javascript — '
-                'they may have changed their technique.'
+                "Error trying to solve Cloudflare IUAM Javascript — "
+                "they may have changed their technique."
             )
 
 _IUAM_PATTERNS = [
     re.compile(
-        r'setTimeout\(function\(\){\s+'
-        r'(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\r?\n[\s\S]+?a\.value\s*=.+?)'
-        r'\r?\n',
+        r"setTimeout\(function\(\){\s+"
+        r"(var s,t,o,p,b,r,e,a,k,i,n,g,f.+?\r?\n[\s\S]+?a\.value\s*=.+?)"
+        r"\r?\n",
         re.DOTALL,
     ),
     re.compile(
-        r'setTimeout\(function\(\){\s+'
-        r'(var (?:s,t,o,p,b,r,e|t,r,a,n,s),a,c,k,e,d.+?\r?\n[\s\S]+?a\.value\s*=.+?)'
-        r'\r?\n',
+        r"setTimeout\(function\(\){\s+"
+        r"(var (?:s,t,o,p,b,r,e|t,r,a,n,s),a,c,k,e,d.+?\r?\n[\s\S]+?a\.value\s*=.+?)"
+        r"\r?\n",
         re.DOTALL,
     ),
 ]
@@ -68,11 +68,11 @@ class _NativeInterpreter(JavaScriptInterpreter):
         from .js_engine import Interpreter, to_string as _ts
         self._Interpreter = Interpreter
         self._to_string = _ts
-        interpreters['native'] = self
+        interpreters["native"] = self
 
     def eval(self, body: str, domain: str):
         ctx = self._Interpreter()
-        ctx.define('atob', lambda s: base64.b64decode(self._to_string(s)).decode('utf-8'))
+        ctx.define("atob", lambda s: base64.b64decode(self._to_string(s)).decode("utf-8"))
         if domain:
             ctx.execute(_browser_stubs(domain))
         return ctx.eval(body)
@@ -87,27 +87,27 @@ class _NativeInterpreter(JavaScriptInterpreter):
 
         if not js_block:
             raise CloudflareSolveError(
-                'Unable to locate Cloudflare IUAM challenge script in the response body.'
+                "Unable to locate Cloudflare IUAM challenge script in the response body."
             )
 
-        js_block = re.sub(r'document\.getElementById\([^)]*\)', '{ value: 0 }', js_block)
+        js_block = re.sub(r"document\.getElementById\([^)]*\)", "{ value: 0 }", js_block)
         js_block = re.sub(
-            r'document\.createElement\([^)]*\)',
+            r"document\.createElement\([^)]*\)",
             f"{{ firstChild: {{ href: 'https://{domain}/' }} }}",
             js_block,
         )
-        js_block = re.sub(r'\.submit\s*\(\s*\)', '', js_block)
+        js_block = re.sub(r"\.submit\s*\(\s*\)", "", js_block)
 
         ctx = self._Interpreter()
-        ctx.define('atob', lambda s: base64.b64decode(self._to_string(s)).decode('utf-8'))
+        ctx.define("atob", lambda s: base64.b64decode(self._to_string(s)).decode("utf-8"))
         ctx.execute(_browser_stubs(domain))
         ctx.execute(js_block)
 
-        a_obj = ctx.get('a')
-        if isinstance(a_obj, dict) and 'value' in a_obj:
+        a_obj = ctx.get("a")
+        if isinstance(a_obj, dict) and "value" in a_obj:
             try:
-                return '{:.10f}'.format(
-                    float(self._to_string(a_obj['value'])) + len(domain)
+                return "{:.10f}".format(
+                    float(self._to_string(a_obj["value"])) + len(domain)
                 )
             except (ValueError, TypeError):
                 pass
