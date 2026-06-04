@@ -1,10 +1,11 @@
+# stealth.py
+            
 import random
 import time
 import logging
 from collections import OrderedDict
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 class StealthMode:
     """
@@ -24,18 +25,34 @@ class StealthMode:
         self.randomize_headers = True
         self.browser_quirks = True
         
-        # Default human-like delay ranges (in seconds) - More reasonable defaults
+                                                                                 
         self.min_delay = 0.5
         self.max_delay = 2.0
         
-        # Browser quirks settings
+                                 
+                                                                  
+        self._chrome_ch_ua_variants = [
+            '"Chromium";v="120", "Google Chrome";v="120", "Not-A.Brand";v="99"',
+            '"Chromium";v="122", "Google Chrome";v="122", "Not-A.Brand";v="24"',
+            '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="24"',
+            '"Chromium";v="128", "Google Chrome";v="128", "Not-A.Brand";v="99"',
+            '"Chromium";v="130", "Google Chrome";v="130", "Not-A.Brand";v="99"',
+            '"Chromium";v="131", "Google Chrome";v="131", "Not-A.Brand";v="24"',
+            '"Chromium";v="132", "Google Chrome";v="132", "Not-A.Brand";v="99"',
+            '"Chromium";v="133", "Google Chrome";v="133", "Not-A.Brand";v="24"',
+            '"Chromium";v="134", "Google Chrome";v="134", "Not-A.Brand";v="99"',
+            '"Chromium";v="135", "Google Chrome";v="135", "Not-A.Brand";v="8"',
+            '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="99"',
+        ]
         self.quirks = {
             'chrome': {
-                'order': ['Host', 'Connection', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 
-                          'User-Agent', 'Accept', 'Sec-Fetch-Site', 'Sec-Fetch-Mode', 'Sec-Fetch-User', 
+                'order': ['Host', 'Connection', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
+                          'User-Agent', 'Accept', 'Sec-Fetch-Site', 'Sec-Fetch-Mode', 'Sec-Fetch-User',
                           'Sec-Fetch-Dest', 'Referer', 'Accept-Encoding', 'Accept-Language', 'Cookie'],
                 'headers': {
-                    'sec-ch-ua': '"Google Chrome";v="117", "Not;A=Brand";v="8", "Chromium";v="117"',
+                                                                                         
+                    'sec-ch-ua': '"Chromium";v="136", "Google Chrome";v="136", "Not-A.Brand";v="99"',
                     'sec-ch-ua-mobile': '?0',
                     'sec-ch-ua-platform': '"Windows"',
                     'Sec-Fetch-Site': 'none',
@@ -46,18 +63,19 @@ class StealthMode:
                 }
             },
             'firefox': {
-                'order': ['Host', 'User-Agent', 'Accept', 'Accept-Language', 'Accept-Encoding', 
-                          'Connection', 'Upgrade-Insecure-Requests', 'Referer', 'Cookie'],
+                'order': ['Host', 'User-Agent', 'Accept', 'Accept-Language', 'Accept-Encoding',
+                          'Connection', 'Upgrade-Insecure-Requests', 'Sec-GPC', 'Referer', 'Cookie'],
                 'headers': {
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.5',
                     'Upgrade-Insecure-Requests': '1',
-                    'Connection': 'keep-alive'
+                    'Connection': 'keep-alive',
+                    'Sec-GPC': '1'
                 }
             }
         }
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def apply_stealth_techniques(self, method, url, **kwargs):
         """
@@ -68,48 +86,48 @@ class StealthMode:
         :param kwargs: Additional arguments for the request
         :return: Modified kwargs
         """
-        # Apply human-like delays between requests
+                                                  
         if self.human_like_delays:
             self._apply_human_like_delay()
             
-        # Randomize headers to look more like a browser
+                                                       
         if self.randomize_headers:
             kwargs = self._randomize_headers(kwargs)
             
-        # Apply browser-specific quirks
+                                       
         if self.browser_quirks:
             kwargs = self._apply_browser_quirks(kwargs)
             
-        # Track request count and time
+                                      
         self.request_count += 1
         self.last_request_time = time.time()
         
         return kwargs
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def _apply_human_like_delay(self):
         """
         Add a random delay between requests to mimic human behavior
         """
-        # Skip delay for the first request
+                                          
         if self.request_count > 0:
-            # Calculate a random delay
+                                      
             delay = random.uniform(self.min_delay, self.max_delay)
 
-            # Add some randomness to make it look more human, but cap it
-            if random.random() < 0.1:  # 10% chance of a longer pause
-                delay *= 1.5  # Reduced from 2x to 1.5x
+                                                                        
+            if random.random() < 0.1:                                
+                delay *= 1.5                           
 
-            # Cap maximum delay to prevent excessive waits
-            delay = min(delay, 10.0)  # Never wait more than 10 seconds
+                                                          
+            delay = min(delay, 10.0)                                   
 
-            # Skip delay if it would be too short to matter
+                                                           
             if delay >= 0.1:
                 logging.debug(f"Applying human-like delay of {delay:.2f} seconds")
                 time.sleep(delay)
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def _randomize_headers(self, kwargs):
         """
@@ -120,9 +138,9 @@ class StealthMode:
         """
         headers = kwargs.get('headers', {})
         
-        # Don't modify User-Agent as it's handled by the User_Agent class
+                                                                         
         
-        # Randomize Accept header slightly (if not already set)
+                                                               
         if 'Accept' not in headers:
             accepts = [
                 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -131,7 +149,7 @@ class StealthMode:
             ]
             headers['Accept'] = random.choice(accepts)
             
-        # Randomize Accept-Language (if not already set)
+                                                        
         if 'Accept-Language' not in headers:
             languages = [
                 'en-US,en;q=0.9',
@@ -142,14 +160,14 @@ class StealthMode:
             ]
             headers['Accept-Language'] = random.choice(languages)
             
-        # Add random DNT (Do Not Track) header
-        if random.random() < 0.5:  # 50% chance
+                                              
+        if random.random() < 0.5:              
             headers['DNT'] = '1'
             
         kwargs['headers'] = headers
         return kwargs
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def _apply_browser_quirks(self, kwargs):
         """
@@ -158,29 +176,44 @@ class StealthMode:
         :param kwargs: Request kwargs
         :return: Modified kwargs with browser quirks
         """
-        # Determine which browser we're mimicking
+                                                 
         user_agent = kwargs.get('headers', {}).get('User-Agent', '')
-        browser_type = 'chrome'  # Default
+        browser_type = 'chrome'           
         
         if 'Firefox/' in user_agent:
             browser_type = 'firefox'
         elif 'Chrome/' in user_agent:
             browser_type = 'chrome'
             
-        # Apply browser-specific headers
+                                        
         headers = kwargs.get('headers', {})
+
+                                                                          
+        if browser_type == 'chrome':
+            import re as _re
+            _m = _re.search(r'Chrome/(\d+)', user_agent)
+            if _m:
+                v = _m.group(1)
+                self.quirks['chrome']['headers']['sec-ch-ua'] = (
+                    f'"Chromium";v="{v}", "Google Chrome";v="{v}", "Not-A.Brand";v="99"'
+                )
+            else:
+                self.quirks['chrome']['headers']['sec-ch-ua'] = random.choice(
+                    self._chrome_ch_ua_variants
+                )
+
         for header, value in self.quirks[browser_type]['headers'].items():
             if header not in headers:
                 headers[header] = value
                 
-        # Reorder headers to match browser's order
+                                                  
         if headers:
             ordered_headers = OrderedDict()
-            # First add headers in the browser's preferred order
+                                                                
             for header in self.quirks[browser_type]['order']:
                 if header in headers:
                     ordered_headers[header] = headers[header]
-            # Then add any remaining headers
+                                            
             for header, value in headers.items():
                 if header not in ordered_headers:
                     ordered_headers[header] = value
@@ -189,7 +222,7 @@ class StealthMode:
             
         return kwargs
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def set_delay_range(self, min_delay, max_delay):
         """
@@ -201,7 +234,7 @@ class StealthMode:
         self.min_delay = min_delay
         self.max_delay = max_delay
         
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def enable_human_like_delays(self, enabled=True):
         """
@@ -211,7 +244,7 @@ class StealthMode:
         """
         self.human_like_delays = enabled
         
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def enable_randomize_headers(self, enabled=True):
         """
@@ -221,7 +254,7 @@ class StealthMode:
         """
         self.randomize_headers = enabled
         
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def enable_browser_quirks(self, enabled=True):
         """

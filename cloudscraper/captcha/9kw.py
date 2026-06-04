@@ -1,3 +1,4 @@
+# 9kw.py
 from __future__ import absolute_import
 
 import re
@@ -22,7 +23,6 @@ from ..exceptions import (
 
 from . import Captcha
 
-
 class captchaSolver(Captcha):
 
     def __init__(self):
@@ -35,7 +35,7 @@ class captchaSolver(Captcha):
             'hCaptcha': 'hcaptcha'
         }
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     @staticmethod
     def checkErrorStatus(response):
@@ -109,7 +109,7 @@ class captchaSolver(Captcha):
             if error_code:
                 raise CaptchaAPIError(error_codes.get(error_code))
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def requestJob(self, jobID):
         if not jobID:
@@ -146,7 +146,7 @@ class captchaSolver(Captcha):
         else:
             raise CaptchaTimeout("9kw: Error failed to solve.")
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def requestSolve(self, captchaType, url, siteKey):
         def _checkRequest(response):
@@ -182,7 +182,7 @@ class captchaSolver(Captcha):
         else:
             raise CaptchaBadJobID('9kw: Error no valid job id was returned.')
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
     def getCaptchaAnswer(self, captchaType, url, siteKey, captchaParams):
         jobID = None
 
@@ -208,7 +208,6 @@ class captchaSolver(Captcha):
                 f"9kw: solve took to long to execute 'captchaid' {jobID}, aborting."
             )
 
-
-# ------------------------------------------------------------------------------- #
+                                                                                   
 
 captchaSolver()

@@ -1,3 +1,4 @@
+# help.py
 import json
 import platform
 import requests
@@ -8,8 +9,7 @@ import urllib3
 from collections import OrderedDict
 from . import __version__ as cloudscraper_version
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 def getPossibleCiphers():
     try:
@@ -19,15 +19,14 @@ def getPossibleCiphers():
     except AttributeError:
         return 'get_ciphers() is unsupported'
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 def _pythonVersion():
     interpreter = platform.python_implementation()
     interpreter_version = platform.python_version()
 
     if interpreter == 'PyPy':
-        interpreter_version = \
+        interpreter_version =\
             f'{sys.pypy_version_info.major}.{sys.pypy_version_info.minor}.{sys.pypy_version_info.micro}'
         if sys.pypy_version_info.releaselevel != 'final':
             interpreter_version = f'{interpreter_version}{sys.pypy_version_info.releaselevel}'
@@ -36,8 +35,7 @@ def _pythonVersion():
         'version': interpreter_version
     }
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 def systemInfo():
     try:
@@ -66,8 +64,7 @@ def systemInfo():
         ))
     ])
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 if __name__ == '__main__':
     print(json.dumps(systemInfo(), indent=4))

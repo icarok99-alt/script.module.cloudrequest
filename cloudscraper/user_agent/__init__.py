@@ -1,3 +1,5 @@
+# __init__.py
+             
 import json
 import os
 import random
@@ -7,19 +9,18 @@ import ssl
 
 from collections import OrderedDict
 
-# ------------------------------------------------------------------------------- #
-
+                                                                                   
 
 class User_Agent():
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def __init__(self, *args, **kwargs):
         self.headers = None
         self.cipherSuite = []
         self.loadUserAgent(*args, **kwargs)
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def filterAgents(self, user_agents):
         filtered = {}
@@ -34,7 +35,7 @@ class User_Agent():
 
         return filtered
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def tryMatchCustom(self, user_agents):
         for device_type in user_agents['user_agents']:
@@ -47,7 +48,7 @@ class User_Agent():
                         return True
         return False
 
-    # ------------------------------------------------------------------------------- #
+                                                                                       
 
     def loadUserAgent(self, *args, **kwargs):
         self.browser = kwargs.pop('browser', None)
@@ -72,7 +73,7 @@ class User_Agent():
             raise RuntimeError("Sorry you can't have mobile and desktop disabled at the same time.")
 
         try:
-            # Try to load from the normal location
+                                                  
             browsers_json_path = os.path.join(os.path.dirname(__file__), 'browsers.json')
             with open(browsers_json_path, 'r') as fp:
                 user_agents = json.load(
@@ -80,16 +81,16 @@ class User_Agent():
                     object_pairs_hook=OrderedDict
                 )
         except (FileNotFoundError, IOError):
-            # Fallback for executable environments
+                                                  
             try:
-                # Try alternative paths for executables
+                                                       
                 import sys
                 if getattr(sys, 'frozen', False):
-                    # Running in a PyInstaller bundle
+                                                     
                     bundle_dir = sys._MEIPASS
                     browsers_json_path = os.path.join(bundle_dir, 'cloudscraper', 'user_agent', 'browsers.json')
                 else:
-                    # Try current directory
+                                           
                     browsers_json_path = os.path.join(os.getcwd(), 'browsers.json')
 
                 with open(browsers_json_path, 'r') as fp:
@@ -98,87 +99,121 @@ class User_Agent():
                         object_pairs_hook=OrderedDict
                     )
             except (FileNotFoundError, IOError):
-                # Ultimate fallback - use comprehensive hardcoded user agents
+                                                                                 
                 user_agents = {
                     "headers": {
                         "chrome": {
                             "User-Agent": None,
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                             "Accept-Language": "en-US,en;q=0.9",
-                            "Accept-Encoding": "gzip, deflate, br"
+                            "Accept-Encoding": "gzip, deflate, br, zstd"
                         },
                         "firefox": {
                             "User-Agent": None,
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                             "Accept-Language": "en-US,en;q=0.5",
-                            "Accept-Encoding": "gzip, deflate, br"
+                            "Accept-Encoding": "gzip, deflate, br, zstd"
                         }
                     },
                     "cipherSuite": {
+                                                                          
                         "chrome": [
                             "TLS_AES_128_GCM_SHA256",
                             "TLS_AES_256_GCM_SHA384",
+                            "TLS_CHACHA20_POLY1305_SHA256",
                             "ECDHE-ECDSA-AES128-GCM-SHA256",
                             "ECDHE-RSA-AES128-GCM-SHA256",
                             "ECDHE-ECDSA-AES256-GCM-SHA384",
-                            "ECDHE-RSA-AES256-GCM-SHA384"
+                            "ECDHE-RSA-AES256-GCM-SHA384",
+                            "ECDHE-ECDSA-CHACHA20-POLY1305",
+                            "ECDHE-RSA-CHACHA20-POLY1305",
+                            "ECDHE-RSA-AES128-SHA",
+                            "ECDHE-RSA-AES256-SHA",
+                            "AES128-GCM-SHA256",
+                            "AES256-GCM-SHA384",
+                            "AES128-SHA",
+                            "AES256-SHA"
                         ],
+                                                                           
                         "firefox": [
                             "TLS_AES_128_GCM_SHA256",
                             "TLS_CHACHA20_POLY1305_SHA256",
                             "TLS_AES_256_GCM_SHA384",
                             "ECDHE-ECDSA-AES128-GCM-SHA256",
                             "ECDHE-RSA-AES128-GCM-SHA256",
-                            "ECDHE-ECDSA-AES256-GCM-SHA384"
+                            "ECDHE-ECDSA-CHACHA20-POLY1305",
+                            "ECDHE-RSA-CHACHA20-POLY1305",
+                            "ECDHE-ECDSA-AES256-GCM-SHA384",
+                            "ECDHE-RSA-AES256-GCM-SHA384",
+                            "ECDHE-ECDSA-AES256-SHA",
+                            "ECDHE-ECDSA-AES128-SHA",
+                            "ECDHE-RSA-AES128-SHA",
+                            "ECDHE-RSA-AES256-SHA",
+                            "DHE-RSA-AES128-SHA",
+                            "DHE-RSA-AES256-SHA"
                         ]
                     },
                     "user_agents": {
                         "desktop": {
                             "windows": {
                                 "chrome": [
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                                    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
                                 ],
                                 "firefox": [
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
-                                    "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:120.0) Gecko/20100101 Firefox/120.0"
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0",
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0"
                                 ]
                             },
                             "linux": {
                                 "chrome": [
-                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                                    "Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
                                 ],
                                 "firefox": [
-                                    "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
-                                    "Mozilla/5.0 (X11; Linux i686; rv:120.0) Gecko/20100101 Firefox/120.0"
+                                    "Mozilla/5.0 (X11; Linux x86_64; rv:136.0) Gecko/20100101 Firefox/136.0",
+                                    "Mozilla/5.0 (X11; Linux x86_64; rv:138.0) Gecko/20100101 Firefox/138.0"
                                 ]
                             },
                             "darwin": {
                                 "chrome": [
-                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
                                 ],
                                 "firefox": [
-                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0"
+                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0",
+                                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:138.0) Gecko/20100101 Firefox/138.0"
                                 ]
                             }
                         },
                         "mobile": {
                             "android": {
                                 "chrome": [
-                                    "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-                                    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                                    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.6943.98 Mobile Safari/537.36",
+                                    "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.100 Mobile Safari/537.36",
+                                    "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36"
                                 ],
                                 "firefox": [
-                                    "Mozilla/5.0 (Mobile; rv:120.0) Gecko/120.0 Firefox/120.0"
+                                    "Mozilla/5.0 (Android 14; Mobile; rv:134.0) Gecko/134.0 Firefox/134.0",
+                                    "Mozilla/5.0 (Android 15; Mobile; rv:138.0) Gecko/138.0 Firefox/138.0"
                                 ]
                             },
                             "ios": {
                                 "chrome": [
-                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1"
+                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/134.0.6998.103 Mobile/15E148 Safari/604.1",
+                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/136.0.7103.56 Mobile/15E148 Safari/604.1"
                                 ],
                                 "firefox": [
-                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/120.0.0.0 Mobile/15E148 Safari/605.1.15"
+                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/135.0 Mobile/15E148 Safari/605.1.15",
+                                    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/138.0 Mobile/15E148 Safari/605.1.15"
                                 ]
                             }
                         }
@@ -194,9 +229,9 @@ class User_Agent():
                 ]
                 self.headers = OrderedDict([
                     ('User-Agent', self.custom),
-                    ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'),
+                    ('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'),
                     ('Accept-Language', 'en-US,en;q=0.9'),
-                    ('Accept-Encoding', 'gzip, deflate, br')
+                    ('Accept-Encoding', 'gzip, deflate, br, zstd')
                 ])
         else:
             if self.browser and self.browser not in self.browsers:
@@ -213,7 +248,7 @@ class User_Agent():
             filteredAgents = self.filterAgents(user_agents['user_agents'])
 
             if not self.browser:
-                # has to be at least one in there...
+                                                    
                 while not filteredAgents.get(self.browser):
                     self.browser = random.SystemRandom().choice(list(filteredAgents.keys()))
 
