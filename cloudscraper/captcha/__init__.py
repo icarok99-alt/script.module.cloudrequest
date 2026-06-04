@@ -1,17 +1,17 @@
+# __init__.py
 import abc
 import logging
 import sys
 
 if sys.version_info >= (3, 4):
-    ABC = abc.ABC  # noqa
+    ABC = abc.ABC
 else:
     ABC = abc.ABCMeta('ABC', (), {})
 
-# ------------------------------------------------------------------------------- #
+
 
 captchaSolvers = {}
 
-# ------------------------------------------------------------------------------- #
 
 
 class Captcha(ABC):
@@ -19,7 +19,7 @@ class Captcha(ABC):
     def __init__(self, name):
         captchaSolvers[name] = self
 
-    # ------------------------------------------------------------------------------- #
+
 
     @classmethod
     def dynamicImport(cls, name):
@@ -35,13 +35,13 @@ class Captcha(ABC):
 
         return captchaSolvers[name]
 
-    # ------------------------------------------------------------------------------- #
+
 
     @abc.abstractmethod
     def getCaptchaAnswer(self, captchaType, url, siteKey, captchaParams):
         pass
 
-    # ------------------------------------------------------------------------------- #
+
 
     def solveCaptcha(self, captchaType, url, siteKey, captchaParams):
         return self.getCaptchaAnswer(captchaType, url, siteKey, captchaParams)

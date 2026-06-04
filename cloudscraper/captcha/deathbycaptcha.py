@@ -1,3 +1,4 @@
+# deathbycaptcha.py
 from __future__ import absolute_import
 
 import json
@@ -23,7 +24,6 @@ from ..exceptions import (
 
 from . import Captcha
 
-
 class captchaSolver(Captcha):
 
     def __init__(self):
@@ -35,7 +35,7 @@ class captchaSolver(Captcha):
             'hCaptcha': '7'
         }
 
-    # ------------------------------------------------------------------------------- #
+
 
     @staticmethod
     def checkErrorStatus(response):
@@ -43,7 +43,7 @@ class captchaSolver(Captcha):
             [
                 (400, "DeathByCaptcha: 400 Bad Request"),
                 (403, "DeathByCaptcha: 403 Forbidden - Invalid credentails or insufficient credits."),
-                # (500, "DeathByCaptcha: 500 Internal Server Error."),
+
                 (503, "DeathByCaptcha: 503 Service Temporarily Unavailable.")
             ]
         )
@@ -51,7 +51,7 @@ class captchaSolver(Captcha):
         if response.status_code in errors:
             raise CaptchaServiceUnavailable(errors.get(response.status_code))
 
-    # ------------------------------------------------------------------------------- #
+
 
     def login(self, username, password):
         self.username = username
@@ -87,7 +87,7 @@ class captchaSolver(Captcha):
 
         self.debugRequest(response)
 
-    # ------------------------------------------------------------------------------- #
+
 
     def reportJob(self, jobID):
         if not jobID:
@@ -124,7 +124,7 @@ class captchaSolver(Captcha):
                 "DeathByCaptcha: Error report failed reCaptcha."
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def requestJob(self, jobID):
         if not jobID:
@@ -157,7 +157,7 @@ class captchaSolver(Captcha):
                 "DeathByCaptcha: Error failed to solve reCaptcha."
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def requestSolve(self, captchaType, url, siteKey):
         def _checkRequest(response):
@@ -225,7 +225,7 @@ class captchaSolver(Captcha):
                 'DeathByCaptcha: Error no job id was returned.'
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def getCaptchaAnswer(self, captchaType, url, siteKey, captchaParams):
         jobID = None
@@ -270,7 +270,6 @@ class captchaSolver(Captcha):
                 f"DeathByCaptcha: Captcha solve took to long to execute job id {jobID}, aborting."
             )
 
-# ------------------------------------------------------------------------------- #
 
 
 captchaSolver()

@@ -1,3 +1,4 @@
+# 2captcha.py
 from __future__ import absolute_import
 
 import requests
@@ -22,7 +23,6 @@ except ImportError:
 
 from . import Captcha
 
-
 class captchaSolver(Captcha):
 
     def __init__(self):
@@ -35,7 +35,7 @@ class captchaSolver(Captcha):
             'turnstile': 'turnstile'
         }
 
-    # ------------------------------------------------------------------------------- #
+
 
     @staticmethod
     def checkErrorStatus(response, request_type):
@@ -92,7 +92,7 @@ class captchaSolver(Captcha):
                 f"{rPayload['request']} {errors.get(request_type).get(rPayload['request'])}"
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def reportJob(self, jobID):
         if not jobID:
@@ -129,7 +129,7 @@ class captchaSolver(Captcha):
                 "2Captcha: Error - Failed to report bad Captcha solve."
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def requestJob(self, jobID):
         if not jobID:
@@ -164,7 +164,7 @@ class captchaSolver(Captcha):
                 "2Captcha: Error failed to solve Captcha."
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def requestSolve(self, captchaType, url, siteKey):
         def _checkRequest(response):
@@ -210,7 +210,7 @@ class captchaSolver(Captcha):
                 '2Captcha: Error no job id was returned.'
             )
 
-    # ------------------------------------------------------------------------------- #
+
 
     def getCaptchaAnswer(self, captchaType, url, siteKey, captchaParams):
         jobID = None
@@ -253,6 +253,5 @@ class captchaSolver(Captcha):
             )
 
 
-# ------------------------------------------------------------------------------- #
 
 captchaSolver()

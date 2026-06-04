@@ -1,3 +1,4 @@
+# __init__.py
 import re
 import sys
 import base64
@@ -6,38 +7,37 @@ import abc
 from ..exceptions import CloudflareSolveError
 
 if sys.version_info >= (3, 4):
-    ABC = abc.ABC  # noqa
+    ABC = abc.ABC
 else:
     ABC = abc.ABCMeta('ABC', (), {})
 
-# ------------------------------------------------------------------------------- #
+
 
 interpreters = {}
 
-# ------------------------------------------------------------------------------- #
 
 
 class JavaScriptInterpreter(ABC):
 
-    # ------------------------------------------------------------------------------- #
+
 
     @abc.abstractmethod
     def __init__(self, name):
         interpreters[name] = self
 
-    # ------------------------------------------------------------------------------- #
+
 
     @classmethod
     def dynamicImport(cls, name=None):
         return interpreters['native']
 
-    # ------------------------------------------------------------------------------- #
+
 
     @abc.abstractmethod
     def eval(self, body, domain):
         pass
 
-    # ------------------------------------------------------------------------------- #
+
 
     def solveChallenge(self, body, domain):
         try:
@@ -48,9 +48,8 @@ class JavaScriptInterpreter(ABC):
             )
 
 
-# ------------------------------------------------------------------------------- #
-# IUAM challenge extraction patterns
-# ------------------------------------------------------------------------------- #
+
+
 
 _IUAM_PATTERNS = [
     re.compile(
@@ -67,7 +66,6 @@ _IUAM_PATTERNS = [
     ),
 ]
 
-
 def _browser_stubs(domain):
     d = domain
     return (
@@ -83,9 +81,8 @@ def _browser_stubs(domain):
     )
 
 
-# ------------------------------------------------------------------------------- #
-# Native pure-Python interpreter
-# ------------------------------------------------------------------------------- #
+
+
 
 class _NativeInterpreter(JavaScriptInterpreter):
     """
@@ -99,7 +96,7 @@ class _NativeInterpreter(JavaScriptInterpreter):
         self._to_string   = _ts
         interpreters['native'] = self
 
-    # ------------------------------------------------------------------------------- #
+
 
     def eval(self, body, domain):
         """Execute JS source in a browser-stub context. Returns raw Python value."""
@@ -109,7 +106,7 @@ class _NativeInterpreter(JavaScriptInterpreter):
             ctx.execute(_browser_stubs(domain))
         return ctx.eval(body)
 
-    # ------------------------------------------------------------------------------- #
+
 
     def solveChallenge(self, body, domain):
         """Extract and solve the IUAM JS block. Returns formatted float string."""
@@ -152,8 +149,7 @@ class _NativeInterpreter(JavaScriptInterpreter):
         )
 
 
-# ------------------------------------------------------------------------------- #
-# Auto-register at import time
-# ------------------------------------------------------------------------------- #
+
+
 
 _NativeInterpreter()
