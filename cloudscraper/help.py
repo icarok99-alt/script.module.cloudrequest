@@ -9,7 +9,7 @@ import urllib3
 from collections import OrderedDict
 from . import __version__ as cloudscraper_version
 
-                                                                                   
+
 
 def getPossibleCiphers():
     try:
@@ -19,7 +19,7 @@ def getPossibleCiphers():
     except AttributeError:
         return 'get_ciphers() is unsupported'
 
-                                                                                   
+
 
 def _pythonVersion():
     interpreter = platform.python_implementation()
@@ -35,7 +35,7 @@ def _pythonVersion():
         'version': interpreter_version
     }
 
-                                                                                   
+
 
 def systemInfo():
     try:
@@ -64,7 +64,7 @@ def systemInfo():
         ))
     ])
 
-                                                                                   
+
 
 if __name__ == '__main__':
     print(json.dumps(systemInfo(), indent=4))

@@ -1,5 +1,5 @@
 # __init__.py
-             
+
 import json
 import os
 import random
@@ -9,18 +9,18 @@ import ssl
 
 from collections import OrderedDict
 
-                                                                                   
+
 
 class User_Agent():
 
-                                                                                       
+
 
     def __init__(self, *args, **kwargs):
         self.headers = None
         self.cipherSuite = []
         self.loadUserAgent(*args, **kwargs)
 
-                                                                                       
+
 
     def filterAgents(self, user_agents):
         filtered = {}
@@ -35,7 +35,7 @@ class User_Agent():
 
         return filtered
 
-                                                                                       
+
 
     def tryMatchCustom(self, user_agents):
         for device_type in user_agents['user_agents']:
@@ -48,7 +48,7 @@ class User_Agent():
                         return True
         return False
 
-                                                                                       
+
 
     def loadUserAgent(self, *args, **kwargs):
         self.browser = kwargs.pop('browser', None)
@@ -73,7 +73,7 @@ class User_Agent():
             raise RuntimeError("Sorry you can't have mobile and desktop disabled at the same time.")
 
         try:
-                                                  
+
             browsers_json_path = os.path.join(os.path.dirname(__file__), 'browsers.json')
             with open(browsers_json_path, 'r') as fp:
                 user_agents = json.load(
@@ -81,16 +81,16 @@ class User_Agent():
                     object_pairs_hook=OrderedDict
                 )
         except (FileNotFoundError, IOError):
-                                                  
+
             try:
-                                                       
+
                 import sys
                 if getattr(sys, 'frozen', False):
-                                                     
+
                     bundle_dir = sys._MEIPASS
                     browsers_json_path = os.path.join(bundle_dir, 'cloudscraper', 'user_agent', 'browsers.json')
                 else:
-                                           
+
                     browsers_json_path = os.path.join(os.getcwd(), 'browsers.json')
 
                 with open(browsers_json_path, 'r') as fp:
@@ -99,7 +99,7 @@ class User_Agent():
                         object_pairs_hook=OrderedDict
                     )
             except (FileNotFoundError, IOError):
-                                                                                 
+
                 user_agents = {
                     "headers": {
                         "chrome": {
@@ -116,7 +116,7 @@ class User_Agent():
                         }
                     },
                     "cipherSuite": {
-                                                                          
+
                         "chrome": [
                             "TLS_AES_128_GCM_SHA256",
                             "TLS_AES_256_GCM_SHA384",
@@ -134,7 +134,7 @@ class User_Agent():
                             "AES128-SHA",
                             "AES256-SHA"
                         ],
-                                                                           
+
                         "firefox": [
                             "TLS_AES_128_GCM_SHA256",
                             "TLS_CHACHA20_POLY1305_SHA256",
@@ -248,7 +248,7 @@ class User_Agent():
             filteredAgents = self.filterAgents(user_agents['user_agents'])
 
             if not self.browser:
-                                                    
+
                 while not filteredAgents.get(self.browser):
                     self.browser = random.SystemRandom().choice(list(filteredAgents.keys()))
 
